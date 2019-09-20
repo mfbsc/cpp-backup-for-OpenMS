@@ -39,20 +39,25 @@
 #include <OpenMS/METADATA/DataProcessing.h>
 #include <OpenMS/METADATA/MetaInfoInterface.h>
 #include <OpenMS/METADATA/MetaInfoInterfaceUtils.h>
-
+#include <OpenMS/DATASTRUCTURES/ListUtils.h>
 
 #include <OpenMS/CONCEPT/UniqueIdInterface.h>
 #include <OpenMS/DATASTRUCTURES/DateTime.h>
 #include <OpenMS/DATASTRUCTURES/Param.h>
+#include <OpenMS/DATASTRUCTURES/String.h>
 
 #include <sqlite3.h>
 #include <sstream>
 #include <map>
+#include <boost/algorithm/string/join.hpp>
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <algorithm>
+#include <vector>
 
 #include <OpenMS/FORMAT/FileHandler.h>
+#include <OpenMS/SYSTEM/File.h>
 
 // #include <Boost>
 
@@ -102,83 +107,13 @@ namespace OpenMS
     }
     return pSTP;
   }
-         
-
-/*
-  // convert int of enum datatype to  
-  std::string enumToPrefix(const int dt)
-  {
-    // create label prefix according to type
-    std::string prefix = "";
-    std::string type = "";
-    PrefixSQLTypePair pSTP;
-    switch(dt){
-      case 0:
-        prefix = "_S_";
-        type = "TEXT";
-        break;
-      case 1:
-        prefix = "_I_";
-        type = "INTEGER";
-        break;
-      case 2:
-        prefix = "_D_";
-        type = "FLOAT";
-        break;
-      case 3:
-        prefix = "_SL_";
-        type = "TEXT";
-        break;
-      case 4:
-        prefix = "_IL_";
-        type = "TEXT";
-        break;
-      case 5:
-        prefix = "_DL_";
-        type = "TEXT";
-        break;
-      case 6:
-        prefix = "";
-        break;
-    }
-    return prefix;
-  }
-*/
-
-
-  /* 
-  // Open database
-  SqliteConnector conn(filename);
-
-  // Create SQL structure
-  const char* create_sql =
-    "CREATE TABLE VERSION(" \
-    "ID INT NOT NULL);" \
-
-    // data_processing table
-    "CREATE TABLE DATA_PROCESSING(" \
-    "ID INT PRIMARY KEY NOT NULL," \
-    "SOFTWARE TEXT NOT NULL," \  //get Enum
-    "DATA TEXT NOT NULL," \
-    "TIME TEXT NOT NULL," \
-    "ACTIONS TEXT NOT NULL);" \
-
-  // Execute SQL create statement
-  conn.executeStatement(create_sql);
-
-  */
 
   // store FeatureMap as SQL database
   // fitted snippet of FeatureXMLFile::load
   void FeatureSQLFile::write(const std::string& out_fm, const FeatureMap& feature_map) const
   {
-    //sqlite3 *db;
-    //sqlite3_stmt * cntstmt;
-    //sqlite3_stmt * stmt;
-    //std::string select_sql;
     std::string path="/home/mkf/Development/OpenMS/src/tests/class_tests/openms/data/";
     std::string filename = path.append(out_fm);
-    //SqliteConnector conn(filename);
 
     std::vector<std::string> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     std::vector<std::string> feature_elements_types = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
@@ -203,58 +138,144 @@ namespace OpenMS
     for (const String& key : common_keys)
     {
       //std::cout << key << "\t" << map_key2type[key] << std::endl;
-      std::cout << key << "\t" << enumToPrefix(map_key2type[key]).prefix << std::endl;
+      //  std::cout << key << "\t" << enumToPrefix(map_key2type[key]).prefix << std::endl;
       // build feature_elements vector with prefixes and keys
       feature_elements.push_back(enumToPrefix(map_key2type[key]).prefix += key);
       // build feature_elements type vector for SQL stmt
       feature_elements_types.push_back(enumToPrefix(map_key2type[key]).sqltype);
     }
+
+
+    //stringstream header = "";
+    //for_each(feature_elements.begin(), feature_elements.end(), [&header] (const std::string& feature_element) { cat(header, feature_element)});
     
+    // create new vector sql_stmt
+    // add type 
+    std::vector<std::string> sql_labels = {};
+    for (std::size_t idx = 0; idx != feature_elements.size(); ++idx)
+    {
+      sql_labels.push_back(feature_elements[idx].append(" " + feature_elements_types[idx]));
+    }
+
+    // add PRIMARY KEY to first entry
+    sql_labels[0].append(" PRIMARY KEY");
+
+    // add "NOT NULL" to each entry
+    std::for_each(sql_labels.begin(), sql_labels.end(), [] (std::string &s) {s.append(" NOT NULL");});
     
+    // generate single string with delimiter
+    std::string sql_stmt = ListUtils::concatenate(sql_labels, ",");
+    
+    std::cout << sql_stmt << std::endl;
+
+    /* table features: sql statement creation finished */       
+
+    // Write sqlite database
+    //sqlite3_stmt * cntstmt;
+    //sqlite3_stmt * stmt;
+    //std::string select_sql;
+    
+    // delete file if present
+    File::remove(filename);
+    
+    //https://github.com/OpenMS/OpenMS/blob/develop/src/openms/source/FORMAT/OSWFile.cpp
+    // Open database
+    SqliteConnector conn(filename);
+    //sqlite3 *db;
+ 
+    // Create SQL structure
+    std::string create_sql =
+    // data_processing table
+      "CREATE TABLE DATA_PROCESSING(" \
+      "ID INT PRIMARY KEY NOT NULL," \
+      "SOFTWARE TEXT NOT NULL," \
+      "DATA TEXT NOT NULL," \
+      "TIME TEXT NOT NULL," \
+      "ACTIONS TEXT NOT NULL);" \
+
+    // features table
+      "CREATE TABLE FEATURES(" \
+      + sql_stmt + \
+      ");"
+
+    // subordinates table
+      "CREATE TABLE SUBORDINATES(" \
+      "ID INT PRIMARY KEY NOT NULL," \
+      "FEATURE_REF TEXT NOT NULL);";
+
+    
+    // Execute SQL create statement
+    conn.executeStatement(create_sql);
+
+    // populate SQL database with map entries
+    
+
+    // export as SQL database
+
+    //    std::vector<std::string> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
 
     // Iteration over FeatureMap
-    // turn into line feed function for SQL database
+    // turn into line feed function for SQL database input step statement
+    
+    //std::vector<const DataValue&> user_param;
+
+
+    /*
+    for (const String& key : common_keys)
+    {
+      const std::string& = feature.getMetaValue(key);
+    }
+    */
+
     for (auto it = feature_map.begin(); it != feature_map.end(); ++it)
     {
-      std::cout << it->getRT() << "\t" << it->getMZ() <<  std::endl;
+      
+      std::cout << \
+        it->getUniqueId() << "\t" << \
+        it->getRT() << "\t" << \
+        it->getMZ() << "\t" << \
+        it->getIntensity() << "\t" << \
+        it->getCharge() << "\t" << \
+        it->getOverallQuality() << "\t" << \
+        std::endl;
     }
-  
-  std::ofstream outfile(filename);
-  outfile << "Test";
-  outfile.close();
+
+    /*
+    for (const String& key : common_keys)
+    {
+      const std::string& = feature.getMetaValue(key);
+    }
+    */
+
+    std::vector<std::string> line_stmt = {};
+    for (auto it = feature_map.begin(); it != feature_map.end(); ++it)
+    {
+      line_stmt.push_back(it->getUniqueId());
+      line_stmt.push_back(it->getRT());
+      line_stmt.push_back(it->getMZ());
+      line_stmt.push_back(it->getIntensity());
+      line_stmt.push_back(it->getCharge());
+      line_stmt.push_back(it->getOverallQuality());
+    }
+
+
+    /*
+    for (auto feature : feature_map)
+    {
+      for (const String& key : common_keys)
+      {
+        if (feature.metaValueExists(key))
+        {
+          const DataValue::DataType& dt = feature.getMetaValue(key).valueType();
+          map_key2type[key] = dt;
+        }
+      }
+    }
+    */
+
   }
-}
+} // end of FeatureSQLFile::write
 
-
-  /*
-
-
-  }
-
-  // populate SQL database with map entries
-  // delete file if present
-  remove(filename);
-
-  // Open database
-  SqliteConnector conn(filename);
-
-  // Create SQL structure
-  const char* create_sql =
-    "CREATE TABLE VERSION(" \
-    "ID INT NOT NULL);" \
-
-    // data_processing table
-    "CREATE TABLE DATA_PROCESSING(" \
-    "ID INT PRIMARY KEY NOT NULL," \
-    "SOFTWARE TEXT NOT NULL," \  //get Enum
-    "DATA TEXT NOT NULL," \
-    "TIME TEXT NOT NULL," \
-    "ACTIONS TEXT NOT NULL);" \
-
-  // Execute SQL create statement
-  conn.executeStatement(create_sql);
-}
-*/
 
 
 
@@ -475,4 +496,11 @@ int main(int argc, char** argv)
     sqlite3_close(DB); 
     return (0); 
 } 
+*/
+
+
+/* SNIPPETS BLOCK
+
+    //std::cout << boost::algorithm::join(feature_elements_types, ", ") << std::endl;
+
 */
