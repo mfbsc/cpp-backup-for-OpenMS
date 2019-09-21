@@ -140,11 +140,13 @@ namespace OpenMS
       //std::cout << key << "\t" << map_key2type[key] << std::endl;
       //  std::cout << key << "\t" << enumToPrefix(map_key2type[key]).prefix << std::endl;
       // build feature_elements vector with prefixes and keys
-      feature_elements.push_back(enumToPrefix(map_key2type[key]).prefix += key);
+      feature_elements.push_back(enumToPrefix(map_key2type[key]).prefix + key);
+      //feature_elements_helper.push_back(enumToPrefix(map_key2type[key]).prefix += key);
       // build feature_elements type vector for SQL stmt
       feature_elements_types.push_back(enumToPrefix(map_key2type[key]).sqltype);
     }
 
+    //std::cout << feature_elements << std::endl;
 
     //stringstream header = "";
     //for_each(feature_elements.begin(), feature_elements.end(), [&header] (const std::string& feature_element) { cat(header, feature_element)});
@@ -154,7 +156,7 @@ namespace OpenMS
     std::vector<std::string> sql_labels = {};
     for (std::size_t idx = 0; idx != feature_elements.size(); ++idx)
     {
-      sql_labels.push_back(feature_elements[idx].append(" " + feature_elements_types[idx]));
+      sql_labels.push_back(feature_elements[idx] + " " + feature_elements_types[idx]);
     }
 
     // add PRIMARY KEY to first entry
@@ -209,55 +211,85 @@ namespace OpenMS
 
     // populate SQL database with map entries
     
-
     // export as SQL database
-
     //    std::vector<std::string> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
+
+
 
     // Iteration over FeatureMap
     // turn into line feed function for SQL database input step statement
-    
-    //std::vector<const DataValue&> user_param;
+    //std::string
+    //std::string
 
-
-    /*
-    for (const String& key : common_keys)
-    {
-      const std::string& = feature.getMetaValue(key);
-    }
-    */
-
+    //int counter = 1;
+    const String feature_elements_sql_stmt = ListUtils::concatenate(feature_elements, ","); 
     for (auto it = feature_map.begin(); it != feature_map.end(); ++it)
     {
       
-      std::cout << \
-        it->getUniqueId() << "\t" << \
-        it->getRT() << "\t" << \
-        it->getMZ() << "\t" << \
-        it->getIntensity() << "\t" << \
-        it->getCharge() << "\t" << \
-        it->getOverallQuality() << "\t" << \
-        std::endl;
+      String line_stmt;
+      std::vector<String> line;
+
+      //line.push_back(it->getUniqueId());
+      line.push_back(static_cast<int64_t>(it->getUniqueId() & ~(1ULL << 63)));
+      //line.push_back(counter);
+      //counter++;
+      line.push_back(it->getRT());
+      line.push_back(it->getMZ());
+      line.push_back(it->getIntensity());
+      line.push_back(it->getCharge());
+      line.push_back(it->getOverallQuality());
+      for (const String& key : common_keys)
+      {
+        String s = it->getMetaValue(key);
+        if (map_key2type[key] == DataValue::STRING_VALUE
+          || map_key2type[key] == DataValue::STRING_LIST)
+        {
+          s = s.substitute("'", "''"); // SQL escape single quote in strings  
+        }
+
+        if (map_key2type[key] == DataValue::STRING_VALUE
+          || map_key2type[key] == DataValue::STRING_LIST
+          || map_key2type[key] == DataValue::INT_LIST
+          || map_key2type[key] == DataValue::DOUBLE_LIST)
+        {
+          s = "'" + s + "'"; // quote around SQL strings (and list types)
+        }
+
+        line.push_back(s);
+      }
+      line_stmt =  "INSERT INTO FEATURES (" + feature_elements_sql_stmt + ") VALUES (";
+      line_stmt += ListUtils::concatenate(line, ",");
+      line_stmt += ");";
+
+      std::cout << "-----------------------------------------" << std::endl;
+      std::cout << line_stmt << std::endl;
+      std::cout << std::endl;
+
+      conn.executeStatement(line_stmt);
     }
+
+
+    //std::string line_stmt = ListUtils::concatenate(line, ",");
+    
+    std::cout << feature_elements_sql_stmt << std::endl;
+    //std::cout <<  << std::endl;
 
     /*
-    for (const String& key : common_keys)
-    {
-      const std::string& = feature.getMetaValue(key);
+
+      for (const String& key : common_keys)
+      {
+        line.push_back(it->getMetaValue(key));
+      }
+      line_smt
+      create_sql =  "INSERT INTO FEATURES VALUES(" + ListUtils::concatenate(line, ",") + ");"); 
+      conn.executeStatement(create_sql);
     }
+
+    std::cout << line_stmt << std::endl;
+
+    
+    
     */
-
-    std::vector<std::string> line_stmt = {};
-    for (auto it = feature_map.begin(); it != feature_map.end(); ++it)
-    {
-      line_stmt.push_back(it->getUniqueId());
-      line_stmt.push_back(it->getRT());
-      line_stmt.push_back(it->getMZ());
-      line_stmt.push_back(it->getIntensity());
-      line_stmt.push_back(it->getCharge());
-      line_stmt.push_back(it->getOverallQuality());
-    }
-
 
     /*
     for (auto feature : feature_map)
