@@ -108,6 +108,9 @@ namespace OpenMS
     return pSTP;
   }
 
+
+
+
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                store FeatureMap as SQL database                                                      //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,16 +119,29 @@ namespace OpenMS
   {
     std::string path="/home/mkf/Development/OpenMS/src/tests/class_tests/openms/data/";
     std::string filename = path.append(out_fm);
+    
+    // delete file if present
     File::remove(filename);
 
+
+
+
+
+  //############################################################################################################# 
+    std::vector<std::string> dataprocessing_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
+    std::vector<std::string> dataprocessing_types = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};    
+        
     std::vector<std::string> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     std::vector<std::string> feature_elements_types = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
     
+    std::vector<std::string> subordinate_elements = {"ID", "REF_ID" "RT", "MZ", "Intensity", "Charge", "Quality"};
+    std::vector<std::string> subordinate_elements_types = {"INTEGER", "INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
+    
+
+
     // read feature_map values and store as key value map
     std::set<String> common_keys = MetaInfoInterfaceUtils::findCommonMetaKeys<FeatureMap, std::set<String> >(feature_map.begin(), feature_map.end(), 0.0);
     std::map<String, DataValue::DataType> map_key2type;
-
-    // delete file if present
 
     for (auto feature : feature_map)
     {
@@ -139,6 +155,9 @@ namespace OpenMS
       }
     }
 
+
+    // prepare feature header
+    // add (dynamic) part of user_parameter labels to header and header type vector 
     for (const String& key : common_keys)
     {
       // feature_elements vector with strings prefix (_TYPE_, _S_, _IL_, ...) and key  
@@ -147,28 +166,78 @@ namespace OpenMS
       feature_elements_types.push_back(enumToPrefix(map_key2type[key]).sqltype);
     }
 
-    // vector sql_labels, concatenate element and respective SQL type
-    std::vector<std::string> sql_labels = {};
-    for (std::size_t idx = 0; idx != feature_elements.size(); ++idx)
+
+
+    // prepare subordinate header
+    for (FeatureMap::const_iterator feature_it = feature_map.begin(); feature_it != feature_map.end(); ++feature_it)
+    //for (auto feature : feature_map)
     {
-      sql_labels.push_back(feature_elements[idx] + " " + feature_elements_types[idx]);
+      for (std::vector<Feature>::const_iterator sub_it = feature_it->getSubordinates().begin(); sub_it != feature_it->getSubordinates().end(); ++sub_it)
+      //  const std::vector<Feature>& feature.getSubordinates(
+      {
+        std::vector<String> keys = {};
+        sub_it->getKeys(keys);
+        for (auto userparam : keys)
+        {
+          std::cout << sub_it->getMetaValue(userparam);
+        }
+        //std::cout << sub_it->getMZ() << std::endl;
+      }
     }
 
+    /*
+    for (FeatureMap::const_iterator feature_it = feature_map.begin(); feature_it != feature_map.end(); ++feature_it)
+    //for (auto feature : feature_map)
+    {
+      for (std::vector<Feature>::const_iterator sub_it = feature_it->getSubordinates().begin(); sub_it != feature_it->getSubordinates().end(); ++sub_it)
+      //  const std::vector<Feature>& feature.getSubordinates(
+      {
+
+        //std::cout << sub_it->getMZ() << std::endl;
+      }
+    }
+    */
+    const String subordinate_elements_sql_stmt = ListUtils::concatenate(subordinate_elements, ","); 
+
+
+
+
+
+
+
+
+
+
+
+
+  //#############################################################################################################
+
+    // construct SQL_labels for dataprocessing, feature and subordinate tables
+    // features:
+    // vector sql_labels, concatenate element and respective SQL type
+    std::vector<std::string> sql_labels_features = {};
+    for (std::size_t idx = 0; idx != feature_elements.size(); ++idx)
+    {
+      sql_labels_features.push_back(feature_elements[idx] + " " + feature_elements_types[idx]);
+    }
+
+
     // add PRIMARY KEY to first entry, assuming 1st column contains primary key
-    sql_labels[0].append(" PRIMARY KEY");
+    sql_labels_features[0].append(" PRIMARY KEY");
     // add "NOT NULL" to all entries
-    std::for_each(sql_labels.begin(), sql_labels.end(), [] (std::string &s) {s.append(" NOT NULL");});
+    std::for_each(sql_labels_features.begin(), sql_labels_features.end(), [] (std::string &s) {s.append(" NOT NULL");});
     // create single string with delimiter ',' as TABLE header template
-    std::string sql_stmt_features = ListUtils::concatenate(sql_labels, ",");
+    std::string sql_stmt_features = ListUtils::concatenate(sql_labels_features, ",");
+
 
     // create SQL database, create empty SQL tables  see (https://github.com/OpenMS/OpenMS/blob/develop/src/openms/source/FORMAT/OSWFile.cpp)
-    // Open database
+    // Open connection to database
     SqliteConnector conn(filename);
  
 
     // Create SQL structure
     std::string create_sql =
-    // data_processing table
+    // dataprocessing table
       "CREATE TABLE DATA_PROCESSING(" \
       "ID INT PRIMARY KEY NOT NULL," \
       "SOFTWARE TEXT NOT NULL," \
@@ -176,20 +245,29 @@ namespace OpenMS
       "TIME TEXT NOT NULL," \
       "ACTIONS TEXT NOT NULL);" \
 
+    
     // features table
       "CREATE TABLE FEATURES(" \
       + sql_stmt_features + \
-      ");"
-
+      ");" ;
+    
+    /*
     // subordinates table
       "CREATE TABLE SUBORDINATES(" \
-      "ID INT PRIMARY KEY NOT NULL," \
-      "FEATURE_REF TEXT NOT NULL);";
-
+      + sql_stmt_subordinates + \
+      ");" \
+      ; // finalize create_sql stmt
+    */
     
     // create SQL tables
     conn.executeStatement(create_sql);
 
+
+
+
+
+
+    //#############################################################################################################
     // populate SQL database with map entries
     
     // export as SQL database
@@ -244,16 +322,6 @@ namespace OpenMS
     std::cout << feature_elements_sql_stmt << std::endl;
 
 
-
-    for (FeatureMap::const_iterator feature_it = feature_map.begin(); feature_it != feature_map.end(); ++feature_it)
-    //for (auto feature : feature_map)
-    {
-      for (std::vector<Feature>::const_iterator sub_it = feature_it->getSubordinates().begin(); sub_it != feature_it->getSubordinates().end(); ++sub_it)
-      //  const std::vector<Feature>& feature.getSubordinates(
-      {
-        std::cout << sub_it->getMZ();
-      }
-    }
 
 
 
