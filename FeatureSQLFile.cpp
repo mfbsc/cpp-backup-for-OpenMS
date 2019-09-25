@@ -144,6 +144,39 @@ namespace OpenMS
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                        variable declaration                                                          //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////   
+    // test for subordinate entries to ensure correct database instantiation
+    bool subordinate_table_exists = false;
+    for (auto feature : feature_map)
+    {
+      for (Feature sub : feature.getSubordinates())
+      {
+        int table_test = static_cast<int64_t>(sub.getUniqueId() & ~(1ULL << 63));
+        {
+          std::cout << table_test;
+          if (table_test != -1)
+          {
+            subordinate_table_exists = true;
+            break;
+          }
+          else
+          {
+            break;
+          }
+        }
+      }
+    }
+
+    if (subordinate_table_exists)
+    {
+      std::cout << "subs here" << std::endl;
+    }
+    else
+    {
+      std::cout << "subs missing" << std::endl;
+    }
+
+
+    
     std::vector<String> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     std::vector<String> feature_elements_types = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
     
@@ -175,8 +208,7 @@ namespace OpenMS
     /// build subordinate header as sql table                                                                                               //
     /// build dataprocessing header as sql table                                                                                            //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // prepare feature header
-    // add (dynamic) part of user_parameter labels to header and header type vector 
+    // prepare feature header, add (dynamic) part of user_parameter labels to header and header type vector 
     for (const String& key : common_keys)
     {
       // feature_elements vector with strings prefix (_TYPE_, _S_, _IL_, ...) and key  
@@ -401,7 +433,7 @@ namespace OpenMS
     /// 3. insert data of dataprocessing table
     const String dataprocessing_elements_sql_stmt = ListUtils::concatenate(dataprocessing_elements, ","); 
     std::cout << dataprocessing_elements_sql_stmt << std::endl;
-    std::cout << "fdsafafasfafdasfasfdafdfasfasfasfafafafd";
+    std::cout << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" << std::endl;
     std::vector<String> dataproc_elems = {};
     dataproc_elems.push_back(static_cast<int64_t>(feature_map.getUniqueId() & ~(1ULL << 63)));
     const std::vector<DataProcessing> dataprocessing = feature_map.getDataProcessing();
@@ -412,15 +444,15 @@ namespace OpenMS
       dataproc_elems.push_back(datap.getCompletionTime().getDate());
       dataproc_elems.push_back(datap.getCompletionTime().getTime());
 
-      auto proc_ac = datap.getProcessingActions();
-      String action;
+      const std::set<DataProcessing::ProcessingAction>& proc_ac = datap.getProcessingActions();
 
-      for (auto it=proc_ac.begin(); it !=proc_ac.end(); ++it)
+      String processing_action_names;
+      for (const DataProcessing::ProcessingAction& a : proc_ac)
       {
-        int proc2int = int(*it);
-        action = DataProcessing::NamesOfProcessingAction[proc2int];
+        const String& action = DataProcessing::NamesOfProcessingAction[int(a)];
+        processing_action_names += action;
       }
-      dataproc_elems.push_back(action);
+      dataproc_elems.push_back(processing_action_names);
     }
 
     for (std::size_t idx = 0; idx != dataprocessing_elements.size(); ++idx)
@@ -440,55 +472,12 @@ namespace OpenMS
     std::cout << ListUtils::concatenate(dataproc_elems, ",");
     
     line_stmt =  "INSERT INTO DATAPROCESSING (" + dataprocessing_elements_sql_stmt + ") VALUES (";
-    line_stmt += ListUtils::concatenate(dataproc_elems, ",");  //"5587969780757606314,'FeatureFinderMetaboIdent','1999-12-31','23:59:59','Quantitation'"; //
+    line_stmt += ListUtils::concatenate(dataproc_elems, ",");
     line_stmt += ");";
     //store in dataprocessing table
     conn.executeStatement(line_stmt);
   }
 } // end of FeatureSQLFile::write
-
-
-
-    /*
-
-    std::cout << "-----------------------------------------" << std::endl;
-    std::cout << line_stmt << std::endl;
-    std::cout << std::endl;
-
-    //std::string line_stmt = ListUtils::concatenate(line, ",");
-
-
-    to test for subordinate
-        if (feature.metaValueExists(key))
-
-
-
-    for (std::vector<Feature>::const_iterator sub_it = feature_it->getSubordinates().begin(); sub_it != feature_it->getSubordinates().end(); ++sub_it)
-    {
-      if (sub_it->metaValueExists("FeatureLevel"))
-      {
-        if (sub_it->getMetaValue("FeatureLevel") == "MS2")
-        {
-          aggr_Peak_Area.push_back((String)sub_it->getIntensity());
-          aggr_Peak_Apex.push_back(String((double)sub_it->getMetaValue("peak_apex_int")));
-          aggr_Fragment_Annotation.push_back((String)sub_it->getMetaValue("native_id"));
-          rt_fwhm.push_back((String)sub_it->getMetaValue("width_at_50"));
-        }
-        else if (sub_it->getMetaValue("FeatureLevel") == "MS1")
-        {
-          aggr_prec_Peak_Area.push_back((String)sub_it->getIntensity());
-          aggr_prec_Peak_Apex.push_back(String((double)sub_it->getMetaValue("peak_apex_int")));
-          aggr_prec_Fragment_Annotation.push_back((String)sub_it->getMetaValue("native_id"));
-        }
-      }
-    }
-    
-    
-    */
-
-    
-
-
 
 
 
@@ -601,62 +590,6 @@ namespace OpenMS
     return (0); 
 } 
 
-
-// insert and delete
-
-static int callback(void* data, int argc, char** argv, char** azColName) 
-{ 
-    int i; 
-    fprintf(stderr, "%s: ", (const char*)data); 
-  
-    for (i = 0; i < argc; i++) { 
-        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL"); 
-    } 
-  
-    printf("\n"); 
-    return 0; 
-} 
-  
-int main(int argc, char** argv) 
-{ 
-    sqlite3* DB; 
-    char* messaggeError; 
-    int exit = sqlite3_open("example.db", &DB); 
-    string query = "SELECT * FROM PERSON;"; 
-  
-    cout << "STATE OF TABLE BEFORE INSERT" << endl; 
-  
-    sqlite3_exec(DB, query.c_str(), callback, NULL, NULL); 
-  
-    string sql("INSERT INTO PERSON VALUES(1, 'STEVE', 'GATES', 30, 'PALO ALTO', 1000.0);"); 
-  
-    exit = sqlite3_exec(DB, sql.c_str(), NULL, 0, &messaggeError); 
-    if (exit != SQLITE_OK) { 
-        std::cerr << "Error Insert" << std::endl; 
-        sqlite3_free(messaggeError); 
-    } 
-    else
-        std::cout << "Records created Successfully!" << std::endl; 
-  
-    cout << "STATE OF TABLE AFTER INSERT" << endl; 
-  
-    sqlite3_exec(DB, query.c_str(), callback, NULL, NULL); 
-  
-    sql = "DELETE FROM PERSON WHERE ID = 2;"; 
-    exit = sqlite3_exec(DB, sql.c_str(), NULL, 0, &messaggeError); 
-    if (exit != SQLITE_OK) { 
-        std::cerr << "Error DELETE" << std::endl; 
-        sqlite3_free(messaggeError); 
-    } 
-    else
-        std::cout << "Record deleted Successfully!" << std::endl; 
-  
-    cout << "STATE OF TABLE AFTER DELETE OF ELEMENT" << endl; 
-    sqlite3_exec(DB, query.c_str(), callback, NULL, NULL); 
-  
-    sqlite3_close(DB); 
-    return (0); 
-} 
 
 
 
