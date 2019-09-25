@@ -79,8 +79,8 @@ namespace OpenMS
   PrefixSQLTypePair enumToPrefix(const DataValue::DataType& dt)
   {
     // create label prefix according to type
-    std::string prefix;
-    std::string type;
+    String prefix;
+    String type;
     PrefixSQLTypePair pSTP;
     switch (dt)
     {
@@ -116,18 +116,12 @@ namespace OpenMS
     return pSTP;
   }
 
+  
   String createTable(const String& table_name, const String& table_stmt)
   {
-
-    String create_table_stmt = "CREATE TABLE" + table_name + "(" + table_stmt ;
+    String create_table_stmt = "CREATE TABLE " + table_name + " (" + table_stmt + ");";
     return create_table_stmt;
   }
-
-
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
 
 
 
@@ -140,27 +134,24 @@ namespace OpenMS
   // fitted snippet of FeatureXMLFile::load
   void FeatureSQLFile::write(const std::string& out_fm, const FeatureMap& feature_map) const
   {
-    std::string path="/home/mkf/Development/OpenMS/src/tests/class_tests/openms/data/";
-    std::string filename = path.append(out_fm);
+    String path="/home/mkf/Development/OpenMS/src/tests/class_tests/openms/data/";
+    String filename = path.append(out_fm);
     
     // delete file if present
     File::remove(filename);
 
-
-
-  
-
+ 
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                        variable declaration                                                          //
-     
-    std::vector<String> dataprocessing_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
-    std::vector<String> dataprocessing_types = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};    
-        
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////   
     std::vector<String> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     std::vector<String> feature_elements_types = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
     
     std::vector<String> subordinate_elements = {"ID", "REF_ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     std::vector<String> subordinate_elements_types = {"INTEGER", "INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
-    
+
+    std::vector<String> dataprocessing_elements = {"ID", "SOFTWARE", "DATE", "TIME", "ACTIONS"};
+    std::vector<String> dataprocessing_elements_types = {"INTEGER" ,"TEXT" ,"TEXT" ,"TEXT" , "TEXT"};
 
 
     // read feature_map values and store as key value map
@@ -179,11 +170,10 @@ namespace OpenMS
       }
     }
 
-
-
-
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //                                                    construct header feature as sql table                                             //
+    /// build header feature for sql table                                                                                                  //
+    /// build subordinate header as sql table                                                                                               //
+    /// build dataprocessing header as sql table                                                                                            //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // prepare feature header
     // add (dynamic) part of user_parameter labels to header and header type vector 
@@ -195,46 +185,19 @@ namespace OpenMS
       feature_elements_types.push_back(enumToPrefix(map_key2type[key]).sqltype);
     }
 
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //                                                    construct subordinte header as sql table                                          //
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     // prepare subordinate header
-    std::vector<String> subordinate_values = {};
     std::map<String, DataValue::DataType> subordinate_key2type;
 
     for (FeatureMap::const_iterator feature_it = feature_map.begin(); feature_it != feature_map.end(); ++feature_it)
-    //for (auto feature : feature_map)
     {
       for (std::vector<Feature>::const_iterator sub_it = feature_it->getSubordinates().begin(); sub_it != feature_it->getSubordinates().end(); ++sub_it)
-      //  const std::vector<Feature>& feature.getSubordinates(
       { 
-        //subordinate_values.push_back(static_cast<int64_t>(feature_it->getUniqueId() & ~(1ULL << 63)));
-
-        std::cout << "-----------------------------------------" << std::endl;
-
         std::vector<String> keys;
         sub_it->getKeys(keys);
-
-          std::cout << static_cast<int64_t>(sub_it->getUniqueId() & ~(1ULL << 63)) << std::endl;
-          std::cout << static_cast<int64_t>(feature_it->getUniqueId() & ~(1ULL << 63)) << std::endl;
-          std::cout << sub_it->getMZ() << std::endl;
-          std::cout << sub_it->getRT() << std::endl;
-          std::cout << sub_it->getIntensity() << std::endl;
-          std::cout << sub_it->getCharge() << std::endl;
-          std::cout << sub_it->getOverallQuality() << std::endl;
-
         for (const String& key : keys)
         {
           subordinate_key2type[key] = sub_it->getMetaValue(key).valueType();
-          // return key name
-          //std::cout << String(key) << std::endl;
-
-          // return key type
-          //std::cout << sub_it->getMetaValue(key).valueType() << std::endl;
-          //subordinate_elements.push_back(enumToPrefix(sub_it->getMetaValue(userparam).valueType().prefix + String(userparam));
-
-          // return value
-          //std::cout << sub_it->getMetaValue(key) << std::endl;         
         }
       }
     }
@@ -247,93 +210,24 @@ namespace OpenMS
       subordinate_elements_types.push_back(enumToPrefix(subordinate_key2type[key2type.second]).sqltype);
     }
 
+    // prepare dataprocessing header
+    // TODO?
 
-    /*
-    for (const Feature& feature : feature_map)
-    {
-      for (const Feature& sub : feature.getSubordinates())
-      { 
-        // for all user param keys present in subordinates
-        for (const std::pair<String, DataValue::DataType> k2t : subordinate_key2type)
-        {
-          const String& key = k2t.first;
-          if (sub.metaValueExists(key))
-          {
-            // alle subordinates durchlaufen?, schauen ob metavalue aller schluessel vorhanden
-            // falls ja, hole wert und addiere zum 
-            // line statement dazu
-
-          }
-          else 
-          {
-            // fuege 
-          }
-          
-        }
-      }
-    }
-    */
-
-
-    String sql_stmt_subordinates = ListUtils::concatenate(subordinate_elements, ",");
-    String sql_stmt_subordinates_types = ListUtils::concatenate(subordinate_elements_types, ",");
-
-    std::cout << sql_stmt_subordinates << std::endl;
-    std::cout << sql_stmt_subordinates_types << std::endl;
-
-
-  /*
-
-    String line_stmt_subordinate;
-    std::vector<String> line_sub;
-
-    // prepare subordinate header
-    for (FeatureMap::const_iterator feature_it = feature_map.begin(); feature_it != feature_map.end(); ++feature_it)
-    //for (auto feature : feature_map)
-    {
-
-
-      for (std::vector<Feature>::const_iterator sub_it = feature_it->getSubordinates().begin(); sub_it != feature_it->getSubordinates().end(); ++sub_it)
-      //  const std::vector<Feature>& feature.getSubordinates(
-      { 
-
-        std::vector<String> keys = {};
-        sub_it->getKeys(keys);
-        for (auto userparam : keys)
-        {
-          line_sub.push_back(static_cast<int64_t>(sub_it->getUniqueId() & ~(1ULL << 63)));
-          line_sub.push_back(static_cast<int64_t>(feature_it->getUniqueId() & ~(1ULL << 63)));
-          line_sub.push_back(sub_it->getRT()() << std::endl;
-          line_sub.push_back(sub_it->getMetaValue(userparam) << std::endl;
-          line_sub.push_back(sub_it->getIntensity());
-          line_sub.push_back(sub_it->getCharge());
-          line_sub.push_back(sub_it->getOverallQuality());
-        }
-        //std::cout << sub_it->getMZ() << std::endl;
-      }
-    }
-    line_stmt_subordinate += ListUtils::concatenate(line_sub, ",");
-
-    std::cout << line_stmt_subordinate << std::endl;
-
-  */
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //                                                  construct database with empty tables                                                //
+    //                                                     create database with empty tables                                                //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // construct SQL_labels for feature, subordinate and dataprocessing tables
-    // create 
-    // 1. empty features table
-
+    // create empty
+    // 1. features table
     // vector sql_labels, concatenate element and respective SQL type
     std::vector<String> sql_labels_features = {};
     for (std::size_t idx = 0; idx != feature_elements.size(); ++idx)
     {
       sql_labels_features.push_back(feature_elements[idx] + " " + feature_elements_types[idx]);
     }
-
     // add PRIMARY KEY to first entry, assuming 1st column contains primary key
     sql_labels_features[0].append(" PRIMARY KEY");
     // add "NOT NULL" to all entries
@@ -342,47 +236,60 @@ namespace OpenMS
     String sql_stmt_features = ListUtils::concatenate(sql_labels_features, ",");
 
 
+    // 2. subordinates table
+    // vector sql_labels, concatenate element and respective SQL type
+    std::vector<String> sql_labels_subordinates = {};
+    for (std::size_t idx = 0; idx != subordinate_elements.size(); ++idx)
+    {
+      sql_labels_subordinates.push_back(subordinate_elements[idx] + " " + subordinate_elements_types[idx]);
+    }
+    // add PRIMARY KEY to first entry, assuming 1st column contains primary key
+    sql_labels_subordinates[0].append(" PRIMARY KEY");
+    // add "NOT NULL" to all entries
+    std::for_each(sql_labels_subordinates.begin(), sql_labels_subordinates.end(), [] (String &s) {s.append(" NOT NULL");});
+    // create single string with delimiter ',' as TABLE header template
+    String sql_stmt_subordinates = ListUtils::concatenate(sql_labels_subordinates, ",");
+
+    // 3. dataprocessing table
+    // see manual entry below
+    std::vector<String> sql_labels_dataprocessing = {};
+    for (std::size_t idx = 0; idx != dataprocessing_elements.size(); ++idx)
+    {
+      sql_labels_dataprocessing.push_back(dataprocessing_elements[idx] + " " + dataprocessing_elements_types[idx]);
+    }
+    // add PRIMARY KEY to first entry, assuming 1st column contains primary key
+    sql_labels_dataprocessing[0].append(" PRIMARY KEY");
+    // add "NOT NULL" to all entries
+    std::for_each(sql_labels_dataprocessing.begin(), sql_labels_dataprocessing.end(), [] (String &s) {s.append(" NOT NULL");});
+    // create single string with delimiter ',' as TABLE header template
+    String sql_stmt_dataprocessing = ListUtils::concatenate(sql_labels_dataprocessing, ",");
+
+    
+    // create empty SQL table stmt
+    // 1. features
+    const String features_table_stmt = createTable("FEATURES", sql_stmt_features); 
+    // 2. subordinates
+    const String subordinates_table_stmt = createTable("SUBORDINATES", sql_stmt_subordinates); 
+    // 3. dataprocessing
+    const String dataprocessing_table_stmt = createTable("DATAPROCESSING", sql_stmt_dataprocessing); 
+
+
+
+    String create_sql = \
+      features_table_stmt + \
+      
+      subordinates_table_stmt + \
+      
+      dataprocessing_table_stmt \
+      
+      // closing statement semicolon
+      ;    
+
+
     // create SQL database, create empty SQL tables  see (https://github.com/OpenMS/OpenMS/blob/develop/src/openms/source/FORMAT/OSWFile.cpp)
     // Open connection to database
     SqliteConnector conn(filename);
- 
-
-    // Create SQL structure
-    std::string create_sql =
-    // dataprocessing table
-      "CREATE TABLE DATA_PROCESSING(" \
-      "ID INT PRIMARY KEY NOT NULL," \
-      "SOFTWARE TEXT NOT NULL," \
-      "DATA TEXT NOT NULL," \
-      "TIME TEXT NOT NULL," \
-      "ACTIONS TEXT NOT NULL);" \
-
-
-    //  + createTable("FEATURES", sql_stmt_features) + ");";
-    
-    // features table
-      "CREATE TABLE FEATURES(" \
-      + sql_stmt_features + \
-      ");" ;
-    
-
-
-    /*
-    // subordinates table
-      "CREATE TABLE SUBORDINATES(" \
-      + sql_stmt_subordinates + \
-      ");" \
-      ; // finalize create_sql stmt
-    */
-    
-    // create SQL tables
     conn.executeStatement(create_sql);
-
-
-
-
-
-
 
 
 
@@ -391,9 +298,6 @@ namespace OpenMS
 
     // break into functions?
     // turn into line feed function for SQL database input step statement
-
-
-
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                     store FeatureMap data in tables                                                  //
     //                                                     1. features                                                                      //                                    
@@ -403,8 +307,7 @@ namespace OpenMS
 
     // Iteration over FeatureMap
     // turn into line feed function for SQL database input step statement
-    // 1. insert data of features table
-
+    /// 1. insert data of features table
     const String feature_elements_sql_stmt = ListUtils::concatenate(feature_elements, ","); 
     for (auto it = feature_map.begin(); it != feature_map.end(); ++it)
     {
@@ -435,78 +338,114 @@ namespace OpenMS
         }
         line.push_back(s);
       }
-
       line_stmt =  "INSERT INTO FEATURES (" + feature_elements_sql_stmt + ") VALUES (";
       line_stmt += ListUtils::concatenate(line, ",");
       line_stmt += ");";
-
-
-      //store features table
+      //store in features table
       conn.executeStatement(line_stmt);
     }
 
-    // 2. insert data of features table
 
-    /*
+    /// 2. insert data of subordinates table
+    String line_stmt;
     const String subordinate_elements_sql_stmt = ListUtils::concatenate(subordinate_elements, ","); 
-    for (auto it = feature_map.begin(); it != feature_map.end(); ++it)
+    //for (auto feature : feature_map)
+    for (const Feature& feature : feature_map)
     {
-
-      String line_stmt;
       std::vector<String> line;
-
-      line.push_back(static_cast<int64_t>(it->getUniqueId() & ~(1ULL << 63)));
-      line.push_back(it->getRT());
-      line.push_back(it->getMZ());
-      line.push_back(it->getIntensity());
-      line.push_back(it->getCharge());
-      line.push_back(it->getOverallQuality());
-      for (const String& key : common_keys)
-      {
-        String s = it->getMetaValue(key);
-        if (map_key2type[key] == DataValue::STRING_VALUE
-          || map_key2type[key] == DataValue::STRING_LIST)
+      for (const Feature& sub : feature.getSubordinates())
+      {          
+        line.push_back(static_cast<int64_t>(sub.getUniqueId() & ~(1ULL << 63)));
+        line.push_back(static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63)));
+        line.push_back(sub.getRT());
+        line.push_back(sub.getMZ());
+        line.push_back(sub.getIntensity());
+        line.push_back(sub.getCharge());
+        line.push_back(sub.getOverallQuality());
+        for (const std::pair<String, DataValue::DataType> k2t : subordinate_key2type)
         {
-          s = s.substitute("'", "''"); // SQL escape single quote in strings  
-        }
+          const String& key = k2t.first;
+          if (sub.metaValueExists(key))
+          {
+            // alle subordinates durchlaufen?, schauen ob metavalue aller schluessel vorhanden
+            // falls ja, hole wert und addiere zum 
+            // line statement dazu
+            String s = sub.getMetaValue(k2t.first);
+            if (k2t.second == DataValue::STRING_VALUE
+              || k2t.second == DataValue::STRING_LIST)
+            {
+              s = s.substitute("'", "''"); // SQL escape single quote in strings  
+            }
 
-        if (map_key2type[key] == DataValue::STRING_VALUE
-          || map_key2type[key] == DataValue::STRING_LIST
-          || map_key2type[key] == DataValue::INT_LIST
-          || map_key2type[key] == DataValue::DOUBLE_LIST)
-        {
-          s = "'" + s + "'"; // quote around SQL strings (and list types)
+            if (k2t.second == DataValue::STRING_VALUE
+              || k2t.second == DataValue::STRING_LIST
+              || k2t.second == DataValue::INT_LIST
+              || k2t.second == DataValue::DOUBLE_LIST)
+            {
+              s = "'" + s + "'"; // quote around SQL strings (and list types)
+            }
+            line.push_back(s);
+          }
         }
-        line.push_back(s);
+        line_stmt =  "INSERT INTO SUBORDINATES (" + subordinate_elements_sql_stmt + ") VALUES (";
+        line_stmt += ListUtils::concatenate(line, ",");
+        line_stmt += ");";
+        //store in subordinates table
+        conn.executeStatement(line_stmt);
+        //clear vector line
+        line.clear();
       }
-
-      line_stmt =  "INSERT INTO FEATURES (" + feature_elements_sql_stmt + ") VALUES (";
-      line_stmt += ListUtils::concatenate(line, ",");
-      line_stmt += ");";
-
-
-      //store features table
-      conn.executeStatement(line_stmt);
     }
-    */
 
 
-    // 3. insert data of dataprocessing table
+    /// 3. insert data of dataprocessing table
+    const String dataprocessing_elements_sql_stmt = ListUtils::concatenate(dataprocessing_elements, ","); 
+    std::cout << dataprocessing_elements_sql_stmt << std::endl;
+    std::cout << "fdsafafasfafdasfasfdafdfasfasfasfafafafd";
+    std::vector<String> dataproc_elems = {};
+    dataproc_elems.push_back(static_cast<int64_t>(feature_map.getUniqueId() & ~(1ULL << 63)));
+    const std::vector<DataProcessing> dataprocessing = feature_map.getDataProcessing();
+  
+    for (auto datap : dataprocessing)
+    {
+      dataproc_elems.push_back(datap.getSoftware().getName());
+      dataproc_elems.push_back(datap.getCompletionTime().getDate());
+      dataproc_elems.push_back(datap.getCompletionTime().getTime());
 
+      auto proc_ac = datap.getProcessingActions();
+      String action;
 
+      for (auto it=proc_ac.begin(); it !=proc_ac.end(); ++it)
+      {
+        int proc2int = int(*it);
+        action = DataProcessing::NamesOfProcessingAction[proc2int];
+      }
+      dataproc_elems.push_back(action);
+    }
 
+    for (std::size_t idx = 0; idx != dataprocessing_elements.size(); ++idx)
+    {
+      //if (dataprocessing_elements_types[elem] == "TEXT")
+      {
+        std::cout << dataprocessing_elements[idx] << std::endl;
+        std::cout << dataprocessing_elements_types[idx] << std::endl;
+        if (dataprocessing_elements_types[idx] == "TEXT")
+        {
+          dataproc_elems[idx] = "'" + dataproc_elems[idx] + "'"; 
+        }
+      }
+    }
+
+    
+    std::cout << ListUtils::concatenate(dataproc_elems, ",");
+    
+    line_stmt =  "INSERT INTO DATAPROCESSING (" + dataprocessing_elements_sql_stmt + ") VALUES (";
+    line_stmt += ListUtils::concatenate(dataproc_elems, ",");  //"5587969780757606314,'FeatureFinderMetaboIdent','1999-12-31','23:59:59','Quantitation'"; //
+    line_stmt += ");";
+    //store in dataprocessing table
+    conn.executeStatement(line_stmt);
   }
 } // end of FeatureSQLFile::write
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -548,6 +487,13 @@ namespace OpenMS
     */
 
     
+
+
+
+
+
+
+
 
 
 
@@ -744,6 +690,9 @@ int main(int argc, char** argv)
 */
 
 
+
+
+
 /* SNIPPETS BLOCK
 
 //std::cout << boost::algorithm::join(feature_elements_types, ", ") << std::endl;
@@ -767,6 +716,81 @@ int main(int argc, char** argv)
       std::cout << key2type.first << std::endl;
       std::cout << key2type.second << std::endl;
     }
+
+
+
+    for (const Feature& feature : feature_map)
+    {
+      for (const Feature& sub : feature.getSubordinates())
+      { 
+        // for all user param keys present in subordinates
+        for (const std::pair<String, DataValue::DataType> k2t : subordinate_key2type)
+        {
+          const String& key = k2t.first;
+          if (sub.metaValueExists(key))
+          {
+            // alle subordinates durchlaufen?, schauen ob metavalue aller schluessel vorhanden
+            // falls ja, hole wert und addiere zum 
+            // line statement dazu
+
+          }
+          else 
+          {
+            // fuege 
+          }
+          
+        }
+      }
+    }
+
+    String line_stmt_subordinate;
+    std::vector<String> line_sub;
+
+    // prepare subordinate header
+    for (FeatureMap::const_iterator feature_it = feature_map.begin(); feature_it != feature_map.end(); ++feature_it)
+    //for (auto feature : feature_map)
+    {
+
+
+      for (std::vector<Feature>::const_iterator sub_it = feature_it->getSubordinates().begin(); sub_it != feature_it->getSubordinates().end(); ++sub_it)
+      //  const std::vector<Feature>& feature.getSubordinates(
+      { 
+
+        std::vector<String> keys = {};
+        sub_it->getKeys(keys);
+        for (auto userparam : keys)
+        {
+          line_sub.push_back(static_cast<int64_t>(sub_it->getUniqueId() & ~(1ULL << 63)));
+          line_sub.push_back(static_cast<int64_t>(feature_it->getUniqueId() & ~(1ULL << 63)));
+          line_sub.push_back(sub_it->getRT()() << std::endl;
+          line_sub.push_back(sub_it->getMetaValue(userparam) << std::endl;
+          line_sub.push_back(sub_it->getIntensity());
+          line_sub.push_back(sub_it->getCharge());
+          line_sub.push_back(sub_it->getOverallQuality());
+        }
+        //std::cout << sub_it->getMZ() << std::endl;
+      }
+    }
+    line_stmt_subordinate += ListUtils::concatenate(line_sub, ",");
+
+    std::cout << line_stmt_subordinate << std::endl;
+
+
+
+
+
+
+
+
+
+
+
+
+    std::cout << "-----------------------------------------" << std::endl;
+    std::cout << line_stmt << std::endl;
+    std::cout << "-----------------------------------------" << std::endl;
+    std::cout << subordinate_elements_sql_stmt << std::endl;
+
 
 
 */
