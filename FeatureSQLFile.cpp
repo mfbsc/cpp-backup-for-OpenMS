@@ -126,8 +126,6 @@ namespace OpenMS
 
 
 
-
-
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                store FeatureMap as SQL database                                                      //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -166,17 +164,10 @@ namespace OpenMS
       }
     }
 
-    if (subordinate_table_exists)
-    {
-      std::cout << "subs here" << std::endl;
-    }
-    else
-    {
-      std::cout << "subs missing" << std::endl;
-    }
 
 
-    
+
+    // declare table entries
     std::vector<String> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     std::vector<String> feature_elements_types = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
     
@@ -187,7 +178,7 @@ namespace OpenMS
     std::vector<String> dataprocessing_elements_types = {"INTEGER" ,"TEXT" ,"TEXT" ,"TEXT" , "TEXT"};
 
 
-    // read feature_map values and store as key value map
+    // read feature_map userparameter values and store as key value map
     std::set<String> common_keys = MetaInfoInterfaceUtils::findCommonMetaKeys<FeatureMap, std::set<String> >(feature_map.begin(), feature_map.end(), 0.0);
     std::map<String, DataValue::DataType> map_key2type;
 
@@ -202,6 +193,28 @@ namespace OpenMS
         }
       }
     }
+
+    // TODO
+    // read feature_map dataprocessing userparameter values and store as key value map
+    std::vector<String> keys;
+    const std::vector<DataProcessing> dataprocessing_userparams = feature_map.getDataProcessing();
+    std::map<String, DataValue::DataType> dataproc_map_key2type;
+
+    for (auto datap : dataprocessing_userparams)
+    {
+      datap.getKeys(keys);
+      for (auto key : keys)
+      {
+        const DataValue::DataType& dt = datap.getMetaValue(key).valueType(); 
+        dataproc_map_key2type[key] = dt;
+        std::cout << std::endl;
+        std::cout << "@@@@@@@@@@@@@@@@@@@" << std::endl;
+        std::cout << key << std::endl;
+        std::cout << String(dataproc_map_key2type[key]) << std::endl;
+
+      }
+    }
+
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// build header feature for sql table                                                                                                  //
@@ -244,6 +257,13 @@ namespace OpenMS
 
     // prepare dataprocessing header
     // TODO?
+    for (const auto& key2type : dataproc_map_key2type)
+    {
+      // dataprocessing vector with strings prefix (_TYPE_, _S_, _IL_, ...) and key  
+      dataprocessing_elements.push_back(enumToPrefix(dataproc_map_key2type[key2type.first]).prefix + key2type.first);
+      // subordinate_elements_type vector with SQL TYPES 
+      dataprocessing_elements_types.push_back(enumToPrefix(dataproc_map_key2type[key2type.second]).sqltype);
+    }
 
 
 
@@ -318,13 +338,18 @@ namespace OpenMS
       ;    
 
 
+    // catch SQL contingencies
+    create_sql = create_sql.substitute("'", "\:"); // SQL escape single quote in strings  
+
+    
+
     // create SQL database, create empty SQL tables  see (https://github.com/OpenMS/OpenMS/blob/develop/src/openms/source/FORMAT/OSWFile.cpp)
     // Open connection to database
     SqliteConnector conn(filename);
     conn.executeStatement(create_sql);
 
 
-
+/*
 
 
 
@@ -432,9 +457,9 @@ namespace OpenMS
 
     /// 3. insert data of dataprocessing table
     const String dataprocessing_elements_sql_stmt = ListUtils::concatenate(dataprocessing_elements, ","); 
-    std::cout << dataprocessing_elements_sql_stmt << std::endl;
-    std::cout << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" << std::endl;
     std::vector<String> dataproc_elems = {};
+    std::vector<String> processing_action_names;
+
     dataproc_elems.push_back(static_cast<int64_t>(feature_map.getUniqueId() & ~(1ULL << 63)));
     const std::vector<DataProcessing> dataprocessing = feature_map.getDataProcessing();
   
@@ -446,13 +471,19 @@ namespace OpenMS
 
       const std::set<DataProcessing::ProcessingAction>& proc_ac = datap.getProcessingActions();
 
-      String processing_action_names;
       for (const DataProcessing::ProcessingAction& a : proc_ac)
       {
         const String& action = DataProcessing::NamesOfProcessingAction[int(a)];
-        processing_action_names += action;
+        processing_action_names.push_back(action);
       }
-      dataproc_elems.push_back(processing_action_names);
+      if (processing_action_names.size() >= 1)
+      {
+        dataproc_elems.push_back(ListUtils::concatenate(processing_action_names, ",")); 
+      }
+      else
+      {
+        dataproc_elems.push_back(processing_action_names[0]);
+      }
     }
 
     for (std::size_t idx = 0; idx != dataprocessing_elements.size(); ++idx)
@@ -476,6 +507,9 @@ namespace OpenMS
     line_stmt += ");";
     //store in dataprocessing table
     conn.executeStatement(line_stmt);
+
+*/
+
   }
 } // end of FeatureSQLFile::write
 
@@ -724,6 +758,21 @@ int main(int argc, char** argv)
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << subordinate_elements_sql_stmt << std::endl;
 
+
+
+
+
+
+
+
+    if (subordinate_table_exists)
+    {
+      std::cout << "subs here" << std::endl;
+    }
+    else
+    {
+      std::cout << "subs missing" << std::endl;
+    }
 
 
 */
