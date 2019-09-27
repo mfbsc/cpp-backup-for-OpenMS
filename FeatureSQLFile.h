@@ -60,7 +60,7 @@ namespace OpenMS
   {
     public:
       void write(const std::string& out_fm, const FeatureMap& fm) const;
-      //FeatureMap read(const std::string& in_featureSQL) const;
+      FeatureMap read(const std::string& in_featureSQL) const;
   };
 
 } // namespace OpenMS

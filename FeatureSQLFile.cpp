@@ -558,36 +558,26 @@ namespace OpenMS
     //store in dataprocessing table
     conn.executeStatement(line_stmt);
 
-
-
-
-  }
-} // end of FeatureSQLFile::write
+  } // end of FeatureSQLFile::write
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-  /*
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  //                                                read FeatureMap as SQL database                                                      //
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // read SQL database and store as FeatureMap
-  // based on TransitionPQPFile::readPQPInput_
+  // fitted snippet of FeatureXMLFile::load
+  // based on TransitionPQPFile::readPQPInput
 
   FeatureMap FeatureSQLFile::read(const std::string& filename) const
   {
     sqlite3 *db;
-    sqlite3_stmt * cntstmt;
-    sqlite3_stmt * stmt;
-    std::string select_sql;
+    //sqlite3_stmt * cntstmt;
+    //sqlite3_stmt * stmt;
+    //std::string select_sql;
+
+    // Open database
     SqliteConnector conn(filename);
     
     // connect database and read tables
@@ -596,47 +586,91 @@ namespace OpenMS
     //create empty FeatureMap object
     FeatureMap feature_map;
 
-    // get table entries if existent
-    bool data_processing_exists = SqliteConnector::tableExists(db, "DATA_PROCESSING");
-    if (data_processing_exists)
-    {    
-      // Execute SQL select statement
-      conn.executePreparedStatement(&stmt, select_sql);
-      sqlite3_step( stmt );
-
-      while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
-      {
-        setProgress(progress++);
-        Feature current_feature;
-
-        Sql::extractValue<double>(&current_feature.setUniqueId(), stmt, 0);
-        Sql::extractValue<double>(&mytransition.library_intensity, stmt, 5);
-        Sql::extractValue<std::string>(&mytransition.group_id, stmt, 6);
-
-      }
-
-    }
 
     bool features_exists = SqliteConnector::tableExists(db, "FEATURES");
     if (features_exists)
-    {
+    { 
+      std::cout << "features ok";
     }
 
     bool subordinates_exists = SqliteConnector::tableExists(db, "SUBORDINATES");
     if (subordinates_exists)
     {
+      std::cout << "subordinates ok";
       // if column FEATURE_REF exists  
       bool feature_ref = SqliteConnector::columnExists(db, "SUBORDINATES", "FEATURE_REF");
-
     }
 
+    bool dataprocessing_exists = SqliteConnector::tableExists(db, "DATAPROCESSING");
+    {
+      std::cout << "dataprocessing ok";
+    }
 
-    // import features and subordinates
+    /*
+      // import features and subordinates
+      int main(int argc, char** argv) 
+      { 
+      sqlite3* DB; 
+      int exit = 0; 
+      exit = sqlite3_open("example.db", &DB); 
+      string data("CALLBACK FUNCTION"); 
 
+      string sql("SELECT * FROM PERSON;"); 
+      if (exit) { 
+          std::cerr << "Error open DB " << sqlite3_errmsg(DB) << std::endl; 
+          return (-1); 
+      } 
+      else
+          std::cout << "Opened Database Successfully!" << std::endl; 
+    
+      int rc = sqlite3_exec(DB, sql.c_str(), callback, (void*)data.c_str(), NULL); 
+    
+      if (rc != SQLITE_OK) 
+          cerr << "Error SELECT" << endl; 
+      else { 
+          cout << "Operation OK!" << endl; 
+      } 
+    
+      sqlite3_close(DB); 
+      return (0); 
+      } 
+    */
+    
+    
+    
     // save data as featureMap
-  }
-  */
-//} // namespace OpenMS
+    
+    
+
+    Feature feature1;
+    feature1.getPosition()[0] = 2.0;
+    feature1.getPosition()[1] = 3.0;
+    feature1.setIntensity(1.0f);
+
+    feature_map.push_back(feature1);
+
+    return feature_map;
+  }  // end of FeatureSQLFile::read
+
+    
+
+
+} // namespace OpenMS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -674,44 +708,12 @@ namespace OpenMS
     sqlite3_close(DB); 
     return (0); 
 } 
-
-
-
-
-// select operation
-int main(int argc, char** argv) 
-{ 
-    sqlite3* DB; 
-    int exit = 0; 
-    exit = sqlite3_open("example.db", &DB); 
-    string data("CALLBACK FUNCTION"); 
-  
-    string sql("SELECT * FROM PERSON;"); 
-    if (exit) { 
-        std::cerr << "Error open DB " << sqlite3_errmsg(DB) << std::endl; 
-        return (-1); 
-    } 
-    else
-        std::cout << "Opened Database Successfully!" << std::endl; 
-  
-    int rc = sqlite3_exec(DB, sql.c_str(), callback, (void*)data.c_str(), NULL); 
-  
-    if (rc != SQLITE_OK) 
-        cerr << "Error SELECT" << endl; 
-    else { 
-        cout << "Operation OK!" << endl; 
-    } 
-  
-    sqlite3_close(DB); 
-    return (0); 
-} 
 */
 
 
 
-
-
-/* SNIPPETS BLOCK
+/*
+SNIPPETS BLOCK
 
 //std::cout << boost::algorithm::join(feature_elements_types, ", ") << std::endl;
 
