@@ -55,6 +55,7 @@
 #include <string>
 #include <algorithm>
 #include <vector>
+#include <boost/algorithm/string.hpp>
 
 #include <OpenMS/FORMAT/FileHandler.h>
 #include <OpenMS/SYSTEM/File.h>
@@ -276,14 +277,21 @@ namespace OpenMS
       // dataprocessing_elements_type vector with SQL TYPES 
       dataprocessing_elements_types.push_back(enumToPrefix(key2type.second).sqltype);
     }
-    // test for illegal entries, here :
+    // test for illegal entries
+    // catch :
+    const std::vector<String> bad_sym = {"+", "-", "?", "!", "*", "@", "%", "^", "&", "#", "=", "/", "\\", ":", "\"", "\'"};
+
     for (std::size_t idx = 0; idx != dataprocessing_elements.size(); ++idx)
     {
       // test for illegal SQL entries in dataprocessing_elements, if found replace
-      if( dataprocessing_elements[idx].hasSubstring(":"))
-      // use String::quote
+      for (const String& sym : bad_sym)
       {
-        dataprocessing_elements[idx] = dataprocessing_elements[idx].quote();
+        if( dataprocessing_elements[idx].hasSubstring(sym))
+        // use String::quote
+        {
+          dataprocessing_elements[idx] = dataprocessing_elements[idx].quote();
+          break;
+        }
       }
     }
 
