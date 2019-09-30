@@ -76,6 +76,7 @@ namespace OpenMS
   //                                                            helper functions                                                          //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+  // write part
   // convert int of enum datatype to a struct with prefix and type 
   PrefixSQLTypePair enumToPrefix(const DataValue::DataType& dt)
   {
@@ -124,6 +125,157 @@ namespace OpenMS
     return create_table_stmt;
   }
 
+
+  // read datatype
+  DataValue getDatatype(String label)
+  { 
+    DataValue datatype;
+    if (label.hasPrefix("_S_"))
+    {
+      datatype = 0;
+    } else
+    if (label.hasPrefix("_I_"))
+    {
+      datatype = 1;
+    } else
+    if (label.hasPrefix("_D_"))
+    {
+      datatype = 2;      
+    } else
+    if (label.hasPrefix("_SL_"))
+    {
+      datatype = 3;
+    } else
+    if (label.hasPrefix("_IL_"))
+    {
+      datatype = 4;
+    } else
+    if (label.hasPrefix("_DL_"))
+    {
+      datatype = 5;
+    } else 
+    {
+      datatype = 6;
+      /*
+      if (!label.hasPrefix("_"))
+      {
+        datatype = 6;
+      }
+      */
+    }
+    return datatype;
+  }
+
+
+    // read part
+  int fillFeatureMap(void *NotUsed, int argc, char **argv, char **azColName)
+  {
+    // int argc: holds number of results
+    // azColName: holds each column returned
+    // argv: holds each volume
+    std::cout << std::endl;
+
+    // set current feature
+    Feature current_feature;
+
+    String label;
+    //for (int i = 0; i < argc; ++i)
+    int f_counter = 0;
+    while (f_counter < argc)
+    {
+      // print part
+      label = azColName[f_counter];
+      std::cout << azColName[f_counter] << ": " << argv[f_counter] << "\t" << std::endl;
+
+      // print type
+      std::cout << getDatatype(label) << std::endl;
+
+      // save feature
+      if (f_counter == 0)
+      {
+        std::cout << "this is a test" << std::endl;
+        std::cout << argv[f_counter] << std::endl;
+        std::cout << "this is a test" << std::endl;
+        
+        
+        
+        current_feature.setUniqueId(argv[0]);
+        current_feature.setRT(double (argv[1]));
+        current_feature.setMZ(double (argv[2]));
+        current_feature.setIntensity(double (argv[3]));
+        current_feature.setCharge(int (argv[4]));
+        current_feature.setOverallQuality(double (argv[5]));
+        
+      /*
+
+        current_feature.setUniqueId(argv[0]);
+        current_feature.setRT(String (argv[1]));
+        current_feature.setMZ(String (argv[2]));
+        current_feature.setIntensity(String (argv[3]));
+        current_feature.setCharge(String (argv[4]));
+        current_feature.setOverallQuality(String (argv[5]));
+      */
+
+        f_counter = 5;
+        continue;
+      } else
+      {
+        std::cout << getDatatype(label) << std::endl;
+      }
+
+    /*
+      if (i == 0)
+      {
+        current_feature.setUniqueId(argv[i]);
+      } else
+      if (i == 1)
+      {
+        current_feature.setRT(argv[i]);
+      } else
+      if (i == 2)
+      {
+        current_feature.setMZ(argv[i]);
+      } else
+      if (i == 3)
+      {
+        current_feature.setIntensity(argv[i]);
+      } else
+      if (i == 4)
+      {
+        current_feature.setCharge(argv[i]);
+      } else
+      if (i == 5)
+      {
+        current_feature.setOverallQuality(argv[i]);
+      } else
+    */  
+      ++f_counter;
+    }
+    std::cout << std::endl;
+
+    // return successful
+    return 0;//feature_map;
+  }
+
+  // read part
+  /*
+  int fillFeatureMap(void *NotUsed, int argc, char **argv, char **azColName)
+  {
+    // int argc: holds number of results
+    // argv: holds each volume
+    // azColName: holds each column returned
+    std::cout << std::endl;
+
+    for (int i = 0; i < argc; ++i)
+    {
+      std::cout << azColName[i] << ": " << argv[i] << "\t" << std::endl;
+    }
+    std::cout << std::endl;
+
+    // return successful
+    return 0;
+  }
+  */
 
 
 
@@ -562,7 +714,6 @@ namespace OpenMS
 
 
 
-
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                read FeatureMap as SQL database                                                      //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -572,30 +723,97 @@ namespace OpenMS
 
   FeatureMap FeatureSQLFile::read(const std::string& filename) const
   {
+    FeatureMap f_map;
+
     sqlite3 *db;
+    // error messages
+    char *zErrMsg = 0;
+
+    // save the result of opening the file
+    int rc;
+
+    // save any sql;
+    String sql;
+
     //sqlite3_stmt * cntstmt;
     //sqlite3_stmt * stmt;
-    //std::string select_sql;
 
-    // Open database
-    SqliteConnector conn(filename);
-    
+    /// Database part
+    // open database
+    //SqliteConnector conn(filename);    
     // connect database and read tables
-    db = conn.getDB();
+    //db = conn.getDB();
 
-    //create empty FeatureMap object
-    FeatureMap feature_map;
+    // open database
+    //rc = SqliteConnector::openDatabase(filename);
+    rc = sqlite3_open(filename.c_str(), &db);
+
+    // save result of opening file
+    if(rc)
+    {
+      std::cout << "DB Error: " << sqlite3_errmsg(db) << std::endl; 
+      // close connection
+      sqlite3_close(db);
+    }
 
 
+  
+  // features
     bool features_exists = SqliteConnector::tableExists(db, "FEATURES");
     if (features_exists)
     { 
-      std::cout << "features ok";
+      std::cout << std::endl;
+      std::cout << "FEATURES ok";
     }
+    sql = "SELECT * FROM FEATURES";
+  
 
+  /*
+    bool subordinates_exists = SqliteConnector::tableExists(db, "SUBORDINATES");
+    if (subordinates_exists)
+    { 
+      std::cout << std::endl;
+      std::cout << "SUBORDINATES ok";
+    }
+   
+    sql = "SELECT * FROM SUBORDINATES";
+  */
+
+  /*  
+    bool dataprocessing_exists = SqliteConnector::tableExists(db, "DATAPROCESSING");
+    if (dataprocessing_exists)
+    { 
+      std::cout << std::endl;
+      std::cout << "DATAPROCESSING ok";
+    }   
+
+    sql = "SELECT * FROM DATAPROCESSING";
+  */
+
+    // save SQL select data
+    sql = sqlite3_exec(db, sql.c_str(), fillFeatureMap, 0, &zErrMsg);
+
+    // close SQL connection
+    sqlite3_close(db);   
+
+    // traverse across entries
+
+
+
+
+
+
+
+    // save in FeatureMap object feature_map 
+
+    // 
+
+
+  /*
     bool subordinates_exists = SqliteConnector::tableExists(db, "SUBORDINATES");
     if (subordinates_exists)
     {
+      std::cout << std::endl;
       std::cout << "subordinates ok";
       // if column FEATURE_REF exists  
       bool feature_ref = SqliteConnector::columnExists(db, "SUBORDINATES", "FEATURE_REF");
@@ -603,44 +821,18 @@ namespace OpenMS
 
     bool dataprocessing_exists = SqliteConnector::tableExists(db, "DATAPROCESSING");
     {
+      std::cout << std::endl;
       std::cout << "dataprocessing ok";
     }
+  */
 
-    /*
-      // import features and subordinates
-      int main(int argc, char** argv) 
-      { 
-      sqlite3* DB; 
-      int exit = 0; 
-      exit = sqlite3_open("example.db", &DB); 
-      string data("CALLBACK FUNCTION"); 
 
-      string sql("SELECT * FROM PERSON;"); 
-      if (exit) { 
-          std::cerr << "Error open DB " << sqlite3_errmsg(DB) << std::endl; 
-          return (-1); 
-      } 
-      else
-          std::cout << "Opened Database Successfully!" << std::endl; 
-    
-      int rc = sqlite3_exec(DB, sql.c_str(), callback, (void*)data.c_str(), NULL); 
-    
-      if (rc != SQLITE_OK) 
-          cerr << "Error SELECT" << endl; 
-      else { 
-          cout << "Operation OK!" << endl; 
-      } 
-    
-      sqlite3_close(DB); 
-      return (0); 
-      } 
-    */
-    
-    
     
     // save data as featureMap
     
     
+    //create empty FeatureMap object
+    FeatureMap feature_map;
 
     Feature feature1;
     feature1.getPosition()[0] = 2.0;
