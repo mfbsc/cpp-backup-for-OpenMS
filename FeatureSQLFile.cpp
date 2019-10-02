@@ -55,7 +55,7 @@
 
 #include <OpenMS/SYSTEM/File.h>
 
-
+#include <unordered_set>
 #include <sqlite3.h>
 #include <sstream>
 #include <map>
@@ -662,7 +662,6 @@ namespace OpenMS
   {
     //create empty FeatureMap object
     FeatureMap feature_map;
-
     sqlite3 *db;
     sqlite3_stmt * stmt;
     std::string select_sql;
@@ -671,11 +670,6 @@ namespace OpenMS
     SqliteConnector conn(filename);
     db = conn.getDB();
 
-  
-
-
-
-
     // features
     bool features_exists = SqliteConnector::tableExists(db, "FEATURES_TABLE");
     if (features_exists)
@@ -683,11 +677,6 @@ namespace OpenMS
       std::cout << std::endl;
       std::cout << "FEATURES_TABLE ok" << std::endl;
     }
-
-    //"FEATURES_SUBORDINATES" 
-    //"FEATURES_DATAPROCESSING"
-
-
 
   /*
     bool subordinates_exists = SqliteConnector::tableExists(db, "FEATURES_SUBORDINATES");
@@ -707,41 +696,38 @@ namespace OpenMS
     }   
   */
 
-    String sql = "SELECT * FROM FEATURES_TABLE;";
+    //"FEATURES_SUBORDINATES" 
+    //"FEATURES_DATAPROCESSING"
 
     // get feature table entries
     //SqliteConnector::executePreparedStatement(db, &stmt, "SELECT * FROM ;");
+    String sql = "SELECT * FROM FEATURES_TABLE;";
     SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-  
-  /*
 
-    SQLITE_API const void *sqlite3_column_blob(sqlite3_stmt*, int iCol);
-    SQLITE_API double sqlite3_column_double(sqlite3_stmt*, int iCol);
-    SQLITE_API int sqlite3_column_int(sqlite3_stmt*, int iCol);
-    SQLITE_API sqlite3_int64 sqlite3_column_int64(sqlite3_stmt*, int iCol);
-    SQLITE_API const unsigned char *sqlite3_column_text(sqlite3_stmt*, int iCol);
-    SQLITE_API const void *sqlite3_column_text16(sqlite3_stmt*, int iCol);
-    SQLITE_API sqlite3_value *sqlite3_column_value(sqlite3_stmt*, int iCol);
-    SQLITE_API int sqlite3_column_bytes(sqlite3_stmt*, int iCol);
-    SQLITE_API int sqlite3_column_bytes16(sqlite3_stmt*, int iCol);
-    SQLITE_API int sqlite3_column_type(sqlite3_stmt*, int iCol);
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                                                     store sqite3 database as FeatureMap                                              //
+    //                                                     1. features                                                                      //                                    
+    //                                                     2. subordinates                                                                  //
+    //                                                     3. dataprocessing                                                                //
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  */
+    /// 1. get feature data from database
 
+    //std::vector<int> ids = {}; //int64_t
+    std::unordered_set<int> feature_ids = {}; //int64_t
 
-    // Convert SQLite data to FeatureMap data structure
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
       Feature current_feature;
 
-    /*
-      //id = sqlite3_column_int<int>(&id, stmt, 0);
-      //MZ.push_back(sqlite3_column_double(stmt, 2));
-    */
       // set feature parameters
-      int id = 0;
-      Sql::extractValue<int>(&id, stmt, 0);
+      String id = 0;
+      Sql::extractValue<String>(&id, stmt, 0);
+      std::cout << id << std::endl;
+
+      // store id for later use in subordinates
+      //feature_ids.insert(id);
       double rt = 0.0;
       Sql::extractValue<double>(&rt, stmt, 1);
       double mz = 0.0;
@@ -806,12 +792,15 @@ namespace OpenMS
         
         if(column_type == DataValue::STRING_LIST)
         {
-          String value; //StringList value;
+          String value; 
           Sql::extractValue<String>(&value, stmt, i);
-          std::cout << "datatype datatype STRING_LIST datatype datatype" << std::endl;
-          std::cout << value << std::endl;
-          std::cout << "datatype datatype datatype datatype datatype" << std::endl;
-          //current_feature.setMetaValue(column_name, value); 
+
+          StringList sl;
+          // cut off "[" and "]""
+          value = value.chop(1);
+          value = value.substr(1);
+          value.split(", ", sl);
+          current_feature.setMetaValue(column_name, sl);
           continue;
         } else
 
@@ -820,10 +809,22 @@ namespace OpenMS
         {
           String value; //IntList value;
           Sql::extractValue<String>(&value, stmt, i); //IntList
-          std::cout << "datatype datatype INT_LIST datatype datatype" << std::endl;
-          std::cout << value << std::endl;
-          std::cout << "datatype datatype datatype datatype datatype" << std::endl;
-          //current_feature.setMetaValue(column_name, value); 
+          value = value.chop(1);
+          value = value.substr(1);
+          std::vector<String> value_list;
+          IntList il = ListUtils::create<int>(value, ',');
+
+        /*
+          // cut off "[" and "]""
+          value = value.chop(1);
+          value = value.substr(1);
+          value.split(", ", value_list);
+          for (String element : value_list)
+          {
+            il.push_back(element.toInt());
+          }
+        */
+          current_feature.setMetaValue(column_name, il);
           continue;
         } else
         
@@ -831,31 +832,24 @@ namespace OpenMS
         {
           String value; //DoubleList value;
           Sql::extractValue<String>(&value, stmt, i); //DoubleList
-          std::cout << "datatype datatype DOUBLE_LIST datatype datatype" << std::endl;
-          //std::cout << value << std::endl;
-          std::cout << "datatype datatype datatype datatype datatype" << std::endl;
-          DoubleList ddvalue;
-          std::vector<double> dvalue;
+          value = value.chop(1);
+          value = value.substr(1);          
+          DoubleList dl = ListUtils::create<double>(value, ',');
+
+        /*  
           std::vector<String> value_list;
-          if (value.hasSubstring("["))
+          // cut off "[" and "]""
+          value = value.chop(1);
+          value = value.substr(1);
+          //std::cout << value << std::endl;
+          value.split(", ", value_list);
+          for (String element : value_list)
           {
-            /* code */
-            value.chop(1);
-            value.substr(1);
-            value.split(" ", value_list);
-            for (String element : value_list)
-            {
-              ddvalue.push_back(element.toDouble());
-            }
-            current_feature.setMetaValue(column_name, ddvalue);
-          /* 
-            String line = ListUtils::concatenate(value_list, "");
-            std::cout << "as string as string as string" << std::endl;
-            std::cout << line << std::endl;
-          */
+            dl.push_back(element.toDouble());
           }
-          
-          //current_feature.setMetaValue(column_name, value); 
+        */
+
+          current_feature.setMetaValue(column_name, dl);
           continue;
         } else
       
@@ -886,7 +880,84 @@ namespace OpenMS
     }
     sqlite3_finalize(stmt);
 
+
+
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// 2. get subordinate data from database
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    sql = "SELECT * FROM FEATURES_SUBORDINATES;";
+    SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+
+  /*
+    while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
+    {
+      Feature current_feature;
+      int id = 0;
+      Sql::extractValue<int>(&id, stmt, 0);
+      int ref_id = 0;
+      Sql::extractValue<int>(&ref_id, stmt, 1);
+      double rt = 0.0;
+      Sql::extractValue<double>(&rt, stmt, 2);
+      double mz = 0.0;
+      Sql::extractValue<double>(&mz, stmt, 3);
+      double intensity = 0.0;
+      Sql::extractValue<double>(&intensity, stmt, 4);
+      int charge = 0.0;
+      Sql::extractValue<int>(&charge, stmt, 5);
+      double quality = 0.0;
+      Sql::extractValue<double>(&quality, stmt, 6);
+
+
+      std::unordered_set<int>::const_iterator sub_in_feat = feature_ids.find(ref_id);
+      if (sub_in_feat == feature_ids.end())
+      {
+        std::cout << ref_id << std::endl;
+        std::cout << "not found " << std::endl;
+      } else
+      {
+        std::cout << ref_id << " is in " << std::endl;  
+      }
+
     
+      // get values
+      // id, RT, MZ, Intensity, Charge, Quality
+      // save SQL column elements as feature
+      current_feature.setUniqueId(id);
+      current_feature.setRT(rt);
+      current_feature.setMZ(mz);
+      current_feature.setIntensity(intensity);
+      current_feature.setCharge(charge);
+      current_feature.setOverallQuality(quality);
+
+    
+
+      // access number of columns and infer type
+      int cols = sqlite3_column_count(stmt);
+    
+      // print out index and column names
+      //std::cout << "columns : \t" << cols << std::endl; 
+
+      // save userparam column names
+      // read colum names, infer DataValue and write data to current_feature
+      // with setMetaValue(value, datatype) DataValue::DataType
+      
+      //result.push_back( sqlite3_column_int(stmt, 0) );
+      sqlite3_step(stmt);
+    }
+    sqlite3_finalize(stmt);
+
+  */
+
+
+
+
+
+
+
+
     // close SQL database connection
 
 
