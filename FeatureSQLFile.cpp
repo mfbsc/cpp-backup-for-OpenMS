@@ -37,6 +37,7 @@
 #include <OpenMS/CONCEPT/UniqueIdInterface.h>
 
 #include <OpenMS/DATASTRUCTURES/DateTime.h>
+#include <OpenMS/DATASTRUCTURES/DataValue.h>
 #include <OpenMS/DATASTRUCTURES/ListUtils.h>
 #include <OpenMS/DATASTRUCTURES/Param.h>
 #include <OpenMS/DATASTRUCTURES/String.h>
@@ -565,7 +566,7 @@ namespace OpenMS
             line.push_back(s);
           }
         }
-        line_stmt =  "INSERT INTO FEATURE_SUBORDINATES (" + subordinate_elements_sql_stmt + ") VALUES (";
+        line_stmt =  "INSERT INTO FEATURES_SUBORDINATES (" + subordinate_elements_sql_stmt + ") VALUES (";
         line_stmt += ListUtils::concatenate(line, ",");
         line_stmt += ");";
         //store in subordinates table
@@ -730,9 +731,6 @@ namespace OpenMS
 
 
     // Convert SQLite data to FeatureMap data structure
-    
-    std::vector<double> MZ;
-
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
       Feature current_feature;
@@ -765,7 +763,6 @@ namespace OpenMS
       current_feature.setCharge(charge);
       current_feature.setOverallQuality(quality);
       
-      // set user parameters
       // access number of columns and infer type
       int cols = sqlite3_column_count(stmt);
       
@@ -776,7 +773,6 @@ namespace OpenMS
       // read colum names, infer DataValue and write data to current_feature
       // with setMetaValue(value, datatype) DataValue::DataType
       
-      std::vector<String> userparameters;
       String column_name;
       int column_type = 0;
 
@@ -784,7 +780,7 @@ namespace OpenMS
       {
         column_name = sqlite3_column_name(stmt, i);
         column_type = getColumnDatatype(column_name);
-        if(column_type == STRING_VALUE)
+        if(column_type == DataValue::STRING_VALUE)
         {
           String value;
           Sql::extractValue<String>(&value, stmt, i);
@@ -792,7 +788,7 @@ namespace OpenMS
           continue;
         } else
         
-        if(column_type == INT_VALUE)
+        if(column_type == DataValue::INT_VALUE)
         {
           int value = 0;
           Sql::extractValue<int>(&value, stmt, i);
@@ -800,7 +796,7 @@ namespace OpenMS
           continue;
         } else
         
-        if(column_type == DOUBLE_VALUE)
+        if(column_type == DataValue::DOUBLE_VALUE)
         {
           double value = 0.0;
           Sql::extractValue<double>(&value, stmt, i);          
@@ -808,75 +804,78 @@ namespace OpenMS
           continue;
         } else
         
-        if(column_type == STRING_LIST)
+        if(column_type == DataValue::STRING_LIST)
         {
-          StringList value;
-          Sql::extractValue<StringList>(&value, stmt, i);
-          current_feature.setMetaValue(column_name, value); 
+          String value; //StringList value;
+          Sql::extractValue<String>(&value, stmt, i);
+          std::cout << "datatype datatype STRING_LIST datatype datatype" << std::endl;
+          std::cout << value << std::endl;
+          std::cout << "datatype datatype datatype datatype datatype" << std::endl;
+          //current_feature.setMetaValue(column_name, value); 
+          continue;
+        } else
+
+        
+        if(column_type == DataValue::INT_LIST)
+        {
+          String value; //IntList value;
+          Sql::extractValue<String>(&value, stmt, i); //IntList
+          std::cout << "datatype datatype INT_LIST datatype datatype" << std::endl;
+          std::cout << value << std::endl;
+          std::cout << "datatype datatype datatype datatype datatype" << std::endl;
+          //current_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
-        if(column_type == INT_LIST)
+        if(column_type == DataValue::DOUBLE_LIST)
         {
-          IntList value;
-          Sql::extractValue<IntList>(&value, stmt, i);
-          current_feature.setMetaValue(column_name, value); 
+          String value; //DoubleList value;
+          Sql::extractValue<String>(&value, stmt, i); //DoubleList
+          std::cout << "datatype datatype DOUBLE_LIST datatype datatype" << std::endl;
+          //std::cout << value << std::endl;
+          std::cout << "datatype datatype datatype datatype datatype" << std::endl;
+          DoubleList ddvalue;
+          std::vector<double> dvalue;
+          std::vector<String> value_list;
+          if (value.hasSubstring("["))
+          {
+            /* code */
+            value.chop(1);
+            value.substr(1);
+            value.split(" ", value_list);
+            for (String element : value_list)
+            {
+              ddvalue.push_back(element.toDouble());
+            }
+            current_feature.setMetaValue(column_name, ddvalue);
+          /* 
+            String line = ListUtils::concatenate(value_list, "");
+            std::cout << "as string as string as string" << std::endl;
+            std::cout << line << std::endl;
+          */
+          }
+          
+          //current_feature.setMetaValue(column_name, value); 
           continue;
         } else
-        
-        if(column_type == DOUBLE_LIST)
-        {
-          DoubleList value;
-          Sql::extractValue<DoubleList>(&value, stmt, i);
-          current_feature.setMetaValue(column_name, value); 
-          continue;
-        } else
-        
-        if(column_type == EMPTY_VALUE)
+      
+        if(column_type == DataValue::EMPTY_VALUE)
         {
           String value;
           Sql::extractValue<String>(&value, stmt, i);
-          current_feature.setMetaValue(column_name, value); 
           continue;
         }
-
-      std::cout << i << ": \t " << column_name << std::endl;
-      //std::cout << i << ": \t " << getColumnName(column_name) << std::endl;
-      //std::cout << i << ": \t " << getColumnDatatype(column_name) << std::endl;    
-          
-      //userparameters.push_back(column_name);
-      //map_col2type[getColumnName(column_name)] = getColumnDatatype(column_name);
-        
-    /*
-
       }
+    
 
-      template <> void extractValue<double>(double* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
-
-      template <> void extractValue<int>(int* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
-
-      template <> void extractValue<String>(String* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
-
-      template <> void extractValue<std::string>(std::string* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
-
-      /// Special case where an integer should be stored in a String field
-      void extractValueIntStr(String* dst, sqlite3_stmt* stmt, int pos);
-
-
-    */
-      
-      }
-    /*
-      for (const auto& col2type : map_col2type)
-      {
-        // get value of label
-        
-        // add to feature
-        current_feature.setMetaValue(col2type.first, col2type.second); 
-        //p->setMetaValue("bestForItsPep", 0);
-      }
-    */
-
+      /*
+        template <> void extractValue<double>(double* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
+        template <> void extractValue<int>(int* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
+        template <> void extractValue<String>(String* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
+        template <> void extractValue<std::string>(std::string* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
+        /// Special case where an integer should be stored in a String field
+        void extractValueIntStr(String* dst, sqlite3_stmt* stmt, int pos);
+      */
 
       // save feature in FeatureMap object
       feature_map.push_back(current_feature);
@@ -884,33 +883,10 @@ namespace OpenMS
       
       //result.push_back( sqlite3_column_int(stmt, 0) );
       sqlite3_step(stmt);
-
     }
     sqlite3_finalize(stmt);
 
-    //String MZs = ListUtils::concatenate(MZ, "\n");
-
-    //std::cout << MZs << std::endl;
-
-    // traverse across entries
     
-    // save in FeatureMap object feature_map
-
-    
-    // save data as featureMap
-
-    
-
-    // create test feature1
-  /*
-    Feature feature1;
-    feature1.getPosition()[0] = 2.0;
-    feature1.getPosition()[1] = 3.0;
-    feature1.setIntensity(1.0f);
-  */
-    // store values to feature1
-  //feature_map.push_back(feature1);
-
     // close SQL database connection
 
 
@@ -918,7 +894,6 @@ namespace OpenMS
     return feature_map;
   
   }  // end of FeatureSQLFile::read
-
 
 
 } // namespace OpenMS
