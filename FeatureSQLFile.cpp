@@ -714,28 +714,43 @@ namespace OpenMS
 
     /// 1. get feature data from database
 
-    //std::vector<int> ids = {}; //int64_t
-    std::unordered_set<int> feature_ids = {}; //int64_t
+    //std::unordered_set<int> feature_ids = {}; //int64_t
+    std::unordered_set<int64_t> feature_ids = {}; //int64_t
 
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
       Feature current_feature;
 
       // set feature parameters
-      String id = 0;
-      Sql::extractValue<String>(&id, stmt, 0);
+      //std::string id_s = "0";
+      //String id_s;
+      String id_s;
+      long id = 0;
+      // extract as String
+      Sql::extractValue<String>(&id_s, stmt, 0);
+      id = stol(id_s);
+      //id = id_s.toInt();
+      // line_sub.push_back(static_cast<int64_t>(sub_it->getUniqueId() & ~(1ULL << 63)));
+
+
+      // extractValue<int> not working as expected
+      // change on next pull request for SqliteConnector
+      //id = id_s.toInt();
       std::cout << id << std::endl;
 
       // store id for later use in subordinates
       //feature_ids.insert(id);
+
+
       double rt = 0.0;
       Sql::extractValue<double>(&rt, stmt, 1);
       double mz = 0.0;
       Sql::extractValue<double>(&mz, stmt, 2);
       double intensity = 0.0;
       Sql::extractValue<double>(&intensity, stmt, 3);
-      int charge = 0.0;
+      int charge = 0;
       Sql::extractValue<int>(&charge, stmt, 4);
+      //std::cout << charge << std::endl;
       double quality = 0.0;
       Sql::extractValue<double>(&quality, stmt, 5);
 
@@ -813,17 +828,6 @@ namespace OpenMS
           value = value.substr(1);
           std::vector<String> value_list;
           IntList il = ListUtils::create<int>(value, ',');
-
-        /*
-          // cut off "[" and "]""
-          value = value.chop(1);
-          value = value.substr(1);
-          value.split(", ", value_list);
-          for (String element : value_list)
-          {
-            il.push_back(element.toInt());
-          }
-        */
           current_feature.setMetaValue(column_name, il);
           continue;
         } else
@@ -835,20 +839,6 @@ namespace OpenMS
           value = value.chop(1);
           value = value.substr(1);          
           DoubleList dl = ListUtils::create<double>(value, ',');
-
-        /*  
-          std::vector<String> value_list;
-          // cut off "[" and "]""
-          value = value.chop(1);
-          value = value.substr(1);
-          //std::cout << value << std::endl;
-          value.split(", ", value_list);
-          for (String element : value_list)
-          {
-            dl.push_back(element.toDouble());
-          }
-        */
-
           current_feature.setMetaValue(column_name, dl);
           continue;
         } else
