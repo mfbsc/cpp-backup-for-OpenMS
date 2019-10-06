@@ -678,23 +678,23 @@ namespace OpenMS
       std::cout << "FEATURES_TABLE ok" << std::endl;
     }
 
-  /*
-    bool subordinates_exists = SqliteConnector::tableExists(db, "FEATURES_SUBORDINATES");
-    if (subordinates_exists)
-    {
-      std::cout << std::endl;
-      std::cout << "subordinates ok";
-      // test if column FEATURE_REF exists  
-      bool feature_ref = SqliteConnector::columnExists(db, "FEATURES_SUBORDINATES", "FEATURE_REF");
-    }
-       
-    bool dataprocessing_exists = SqliteConnector::tableExists(db, "DATAPROCESSING");
-    if (dataprocessing_exists)
-    { 
-      std::cout << std::endl;
-      std::cout << "FEATURES_DATAPROCESSING ok";
-    }   
-  */
+    /*
+      bool subordinates_exists = SqliteConnector::tableExists(db, "FEATURES_SUBORDINATES");
+      if (subordinates_exists)
+      {
+        std::cout << std::endl;
+        std::cout << "subordinates ok";
+        // test if column FEATURE_REF exists  
+        bool feature_ref = SqliteConnector::columnExists(db, "FEATURES_SUBORDINATES", "FEATURE_REF");
+      }
+        
+      bool dataprocessing_exists = SqliteConnector::tableExists(db, "DATAPROCESSING");
+      if (dataprocessing_exists)
+      { 
+        std::cout << std::endl;
+        std::cout << "FEATURES_DATAPROCESSING ok";
+      }   
+    */
 
     //"FEATURES_SUBORDINATES" 
     //"FEATURES_DATAPROCESSING"
@@ -715,7 +715,7 @@ namespace OpenMS
     /// 1. get feature data from database
 
     //std::unordered_set<int> feature_ids = {}; //int64_t
-    std::unordered_set<int64_t> feature_ids = {}; //int64_t
+    std::unordered_set<long> feature_ids = {}; //long for compatibility
 
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
@@ -724,22 +724,24 @@ namespace OpenMS
       // set feature parameters
       //std::string id_s = "0";
       //String id_s;
+
       String id_s;
       long id = 0;
       // extract as String
       Sql::extractValue<String>(&id_s, stmt, 0);
       id = stol(id_s);
+      
       //id = id_s.toInt();
       // line_sub.push_back(static_cast<int64_t>(sub_it->getUniqueId() & ~(1ULL << 63)));
 
-
       // extractValue<int> not working as expected
       // change on next pull request for SqliteConnector
+      
       //id = id_s.toInt();
       std::cout << id << std::endl;
 
       // store id for later use in subordinates
-      //feature_ids.insert(id);
+      feature_ids.insert(id);
 
 
       double rt = 0.0;
@@ -767,7 +769,7 @@ namespace OpenMS
       // access number of columns and infer type
       int cols = sqlite3_column_count(stmt);
       
-      // print out index and column names
+      // print index and column names
       //std::cout << "columns : \t" << cols << std::endl; 
 
       // save userparam column names
@@ -777,6 +779,10 @@ namespace OpenMS
       String column_name;
       int column_type = 0;
 
+      // spare first six values with feature parameters
+      // parse values with respective DataValue::DataType
+      // TODO: Integer values incorrectly typed as String
+      // because of read out error
       for (int i = 6; i < cols ; ++i)
       {
         column_name = sqlite3_column_name(stmt, i);
@@ -852,14 +858,6 @@ namespace OpenMS
       }
     
 
-      /*
-        template <> void extractValue<double>(double* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
-        template <> void extractValue<int>(int* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
-        template <> void extractValue<String>(String* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
-        template <> void extractValue<std::string>(std::string* dst, sqlite3_stmt* stmt, int pos); //explicit specialization
-        /// Special case where an integer should be stored in a String field
-        void extractValueIntStr(String* dst, sqlite3_stmt* stmt, int pos);
-      */
 
       // save feature in FeatureMap object
       feature_map.push_back(current_feature);
@@ -868,54 +866,122 @@ namespace OpenMS
       //result.push_back( sqlite3_column_int(stmt, 0) );
       sqlite3_step(stmt);
     }
-    sqlite3_finalize(stmt);
-
-
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// 2. get subordinate data from database
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+
+/*
     sql = "SELECT * FROM FEATURES_SUBORDINATES;";
     SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
+  
 
-  /*
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
-      Feature current_feature;
-      int id = 0;
-      Sql::extractValue<int>(&id, stmt, 0);
-      int ref_id = 0;
-      Sql::extractValue<int>(&ref_id, stmt, 1);
+      String subord_id;
+      long sub_id = 0;
+      // extract as String
+      Sql::extractValue<String>(&subord_id, stmt, 0);
+      sub_id = stol(subord_id);
+
+      String ref_id;
+      long r_id = 0;
+      // extract as String
+      Sql::extractValue<String>(&subord_id, stmt, 1);
+      r_id = stol(subord_id);
+
       double rt = 0.0;
       Sql::extractValue<double>(&rt, stmt, 2);
+      
       double mz = 0.0;
       Sql::extractValue<double>(&mz, stmt, 3);
+      
       double intensity = 0.0;
       Sql::extractValue<double>(&intensity, stmt, 4);
-      int charge = 0.0;
+      
+      int charge = 0;
       Sql::extractValue<int>(&charge, stmt, 5);
+      
       double quality = 0.0;
       Sql::extractValue<double>(&quality, stmt, 6);
 
 
-      std::unordered_set<int>::const_iterator sub_in_feat = feature_ids.find(ref_id);
-      if (sub_in_feat == feature_ids.end())
+      std::unordered_set<long>::const_iterator subordinate_in_feature = feature_ids.find(r_id);
+      if (subordinate_in_feature == feature_ids.end())
       {
-        std::cout << ref_id << std::endl;
-        std::cout << "not found " << std::endl;
+        std::cout << r_id << " not found " << std::endl;
       } else
       {
-        std::cout << ref_id << " is in " << std::endl;  
+        std::cout << r_id << " is in " << std::endl;
       }
+      sqlite3_step(stmt);
+    }
+  
 
-    
+*/
+
+
+
+
+
+
+
+
+
+    sql = "SELECT ref_id FROM FEATURES_SUBORDINATES;";
+    SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+
+
+    while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
+    {
+      String ref_id;
+      long r_id = 0;
+      // extract as String
+      Sql::extractValue<String>(&ref_id, stmt, 0);
+      r_id = stol(ref_id);
+
+      std::cout << r_id << " is in " << std::endl;
+      sqlite3_step(stmt);
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /*
+
+        // Iteration over FeatureMap
+        for (auto it = map.begin(); it != map.end(); ++it)
+        {
+          cout << it->getRT() << " - " << it->getMZ() << endl;
+        }
+
+
+    */ 
+
+
+
+    /*   
       // get values
       // id, RT, MZ, Intensity, Charge, Quality
       // save SQL column elements as feature
-      current_feature.setUniqueId(id);
+      current_feature.setUniqueId(sub_id);
       current_feature.setRT(rt);
       current_feature.setMZ(mz);
       current_feature.setIntensity(intensity);
@@ -933,30 +999,24 @@ namespace OpenMS
       // save userparam column names
       // read colum names, infer DataValue and write data to current_feature
       // with setMetaValue(value, datatype) DataValue::DataType
-      
+
+    
+
       //result.push_back( sqlite3_column_int(stmt, 0) );
       sqlite3_step(stmt);
     }
-    sqlite3_finalize(stmt);
+    */
 
-  */
-
-
-
-
-
-
-
-
-    // close SQL database connection
-
-
-    // return FeatureMap 
-    return feature_map;
+  sqlite3_finalize(stmt);
+  // close SQL database connection
   
-  }  // end of FeatureSQLFile::read
+
+  // return FeatureMap 
+  return feature_map;
+  }
 
 
+  // end of FeatureSQLFile::read
 } // namespace OpenMS
 
 
@@ -1140,6 +1200,26 @@ SNIPPETS BLOCK
     }
     std::cout << std::endl;
     std::cout << dataproc_map_key2type.size() << "\n";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
