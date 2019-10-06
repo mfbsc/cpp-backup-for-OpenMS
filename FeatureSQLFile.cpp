@@ -714,6 +714,48 @@ namespace OpenMS
 
     /// 1. get feature data from database
 
+
+    /*
+      if (subordinate_in_feature == feature_ids.end())
+      {
+        std::cout << r_id << " not found " << std::endl;
+      } else
+      {
+        std::cout << r_id << " is in " << std::endl;
+      }
+      sqlite3_step(stmt);
+    */
+
+
+    // get subordinate ref_id list
+    sql = "SELECT ref_id FROM FEATURES_SUBORDINATES ORDER BY ref_id ASC;";
+    SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+
+    std::vector<long> ref_ids = {}; //long for compatibility
+    //std::unordered_set<long> ref_ids = {};
+
+
+    while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
+    {
+      String ref_id;
+      long r_id = 0;
+      // extract as String
+      Sql::extractValue<String>(&ref_id, stmt, 0);
+      r_id = stol(ref_id);
+      ref_ids.push_back(r_id);
+      //ref_ids.insert(r_id);
+
+      sqlite3_step(stmt);
+    }
+
+    String ref_line = ListUtils::concatenate(ref_ids, ",");
+    std::cout << ref_line << std::endl;
+
+
+
+
+
     //std::unordered_set<int> feature_ids = {}; //int64_t
     std::unordered_set<long> feature_ids = {}; //long for compatibility
 
@@ -923,34 +965,6 @@ namespace OpenMS
   
 
 */
-
-
-
-
-
-
-
-
-
-    sql = "SELECT ref_id FROM FEATURES_SUBORDINATES;";
-    SqliteConnector::executePreparedStatement(db, &stmt, sql);
-    sqlite3_step(stmt);
-
-
-    while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
-    {
-      String ref_id;
-      long r_id = 0;
-      // extract as String
-      Sql::extractValue<String>(&ref_id, stmt, 0);
-      r_id = stol(ref_id);
-
-      std::cout << r_id << " is in " << std::endl;
-      sqlite3_step(stmt);
-
-    }
-
-
 
 
 
