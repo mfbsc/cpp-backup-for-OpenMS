@@ -726,7 +726,7 @@ namespace OpenMS
 
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
-      Feature current_feature;
+      Feature current_sub_feature;
 
       /// save ref_id vector
       String ref_id;
@@ -768,12 +768,12 @@ namespace OpenMS
       // get values
       // id, RT, MZ, Intensity, Charge, Quality
       // save SQL column elements as feature
-      current_feature.setUniqueId(id);
-      current_feature.setRT(rt);
-      current_feature.setMZ(mz);
-      current_feature.setIntensity(intensity);
-      current_feature.setCharge(charge);
-      current_feature.setOverallQuality(quality);
+      current_sub_feature.setUniqueId(id);
+      current_sub_feature.setRT(rt);
+      current_sub_feature.setMZ(mz);
+      current_sub_feature.setIntensity(intensity);
+      current_sub_feature.setCharge(charge);
+      current_sub_feature.setOverallQuality(quality);
       
       // access number of columns and infer type
       int cols = sqlite3_column_count(stmt);
@@ -798,7 +798,7 @@ namespace OpenMS
         {
           String value;
           Sql::extractValue<String>(&value, stmt, i);
-          current_feature.setMetaValue(column_name, value); 
+          current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
@@ -806,7 +806,7 @@ namespace OpenMS
         {
           int value = 0;
           Sql::extractValue<int>(&value, stmt, i);
-          current_feature.setMetaValue(column_name, value); 
+          current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
@@ -814,7 +814,7 @@ namespace OpenMS
         {
           double value = 0.0;
           Sql::extractValue<double>(&value, stmt, i);          
-          current_feature.setMetaValue(column_name, value); 
+          current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
@@ -828,7 +828,7 @@ namespace OpenMS
           value = value.chop(1);
           value = value.substr(1);
           value.split(", ", sl);
-          current_feature.setMetaValue(column_name, sl);
+          current_sub_feature.setMetaValue(column_name, sl);
           continue;
         } else
 
@@ -841,7 +841,7 @@ namespace OpenMS
           value = value.substr(1);
           std::vector<String> value_list;
           IntList il = ListUtils::create<int>(value, ',');
-          current_feature.setMetaValue(column_name, il);
+          current_sub_feature.setMetaValue(column_name, il);
           continue;
         } else
         
@@ -852,7 +852,7 @@ namespace OpenMS
           value = value.chop(1);
           value = value.substr(1);          
           DoubleList dl = ListUtils::create<double>(value, ',');
-          current_feature.setMetaValue(column_name, dl);
+          current_sub_feature.setMetaValue(column_name, dl);
           continue;
         } else
       
@@ -865,9 +865,7 @@ namespace OpenMS
       }
     
       /// save subordinates vector
-      subordinates.push_back(current_feature);
-
-
+      subordinates.push_back(current_sub_feature);
 
 
 
@@ -882,13 +880,17 @@ namespace OpenMS
 
 
     /// traverse across features and add subordinate features if existent
-    String sql = "SELECT * FROM FEATURES_TABLE;";
+    sql = "SELECT * FROM FEATURES_TABLE ORDER BY id ASC;";
     SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
+    
 
 
     //std::unordered_set<int> feature_ids = {}; //int64_t
     std::unordered_set<long> feature_ids = {}; //long for compatibility
+    
+    // set subordinate counter
+    int ref_counter = 0;
 
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
@@ -1023,24 +1025,41 @@ namespace OpenMS
           continue;
         }
       }
-    
 
-
-      if (std::find(vec.begin(), vec.end(), id) != vec.end())
+      //if (std::find(ref_ids.begin(), ref_ids.end(), id) != ref_ids.end())
+      if (ref_ids[ref_counter] == id)
       {
-        // add entries to feature subordinate
-      } else
-      {
-        std::cout << r_id << " is in " << std::endl;
+        while (ref_ids[ref_counter] == ref_ids[ref_counter + 1])
+        {
+          // add entries to feature subordinate
+          
+          std::vector<Feature> current_subordinate;
+          current_subordinate.push_back(subordinates[ref_counter]);
+          current_feature.setSubordinates(current_subordinate);
+          std::cout << id << " is in " << std::endl;
+          std::cout << ref_counter << " is in " << std::endl;
+        
+          // increase counter for subordinate vector index
+          ++ref_counter;
+        }
+        ++ref_counter;
       }
-      sqlite3_step(stmt);
-
+    /*
+       else
+      {
+        std::cout << id << " is out " << std::endl;
+      }
+    */
       // save feature in FeatureMap object
       feature_map.push_back(current_feature);
       feature_map.ensureUniqueId();
       
       //result.push_back( sqlite3_column_int(stmt, 0) );
       sqlite3_step(stmt);
+
+
+      std::cout << ref_counter << " is in " << std::endl;
+
     }
 
 
@@ -1099,16 +1118,6 @@ namespace OpenMS
   
 
 */
-
-
-
-
-
-
-
-
-
-
 
 
 
