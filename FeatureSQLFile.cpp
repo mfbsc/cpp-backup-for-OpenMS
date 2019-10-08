@@ -760,9 +760,6 @@ namespace OpenMS
     //std::unordered_set<int> feature_ids = {}; //int64_t
     std::unordered_set<long> feature_ids = {}; //long for compatibility
     
-    // set subordinate counter
-    int ref_counter = 0;
-
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
       Feature current_feature;
@@ -884,19 +881,12 @@ namespace OpenMS
         }
       }
 
-
       // save feature in FeatureMap object
       feature_map.push_back(current_feature);
       feature_map.ensureUniqueId();
 
-
-      //result.push_back( sqlite3_column_int(stmt, 0) );
       sqlite3_step(stmt);
-      std::cout << ref_counter << " is in " << std::endl;
-
     }
-
-
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1066,32 +1056,27 @@ namespace OpenMS
       /// find feature id in map as key
       auto idx_sub = id_subs.find(id);
 
-      /// return number of keys
-      int vec_size = id_subs.count(id);
+      //std::vector<int, Feature> test;
+      auto pairs = idx_sub->second;
 
-      std::cout << vec_size << std::endl;
+      /// return number of keys
+      int vec_size = pairs.size();
 
       /// create subordinate vector with size according to amount of pairs
       std::vector<Feature> subordinates(vec_size);
 
-      /// traverse across all indices and store features at index given
-      for (const auto & id_sub : id_subs)
+      for (int pos = 0; pos != vec_size; ++pos)
       {
-        if (id_sub == id)
-        {
-          std::cout << "test" << std::endl;
-        }
-        //subordinates.insert(idx_sub.second, idx_sub.first);
+        std::cout << pairs[pos].first << std::endl;
+        int current_sub_pos = pairs[pos].first;
+        Feature current_sub = pairs[pos].second;
+        subordinates[current_sub_pos] = current_sub;
       }
-
-      /// set subordinates
-      //feature.setSubordinates(subordinates);
     
-
+      /// set subordinates
+      feature.setSubordinates(subordinates);
+    
     }
-
-
-  
 
 
 
@@ -1130,7 +1115,7 @@ namespace OpenMS
     
 
 
-    std::cout << software << "\n" << data << "\n" << time << "\n" << action << "\n" << std::endl;
+    //std::cout << software << "\n" << data << "\n" << time << "\n" << action << "\n" << std::endl;
 
     DataProcessing dp;
 
