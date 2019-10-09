@@ -136,7 +136,7 @@ namespace OpenMS
 
   // get datatype
   //if ((dt == DataValue::STRING_VALUE) || (dt == DataValue::STRING_LIST))
-  DataValue::DataType getColumnDatatype(String label)
+  DataValue::DataType getColumnDatatype(const String label)
   { 
     DataValue::DataType type;
     if (label.hasPrefix("_S_"))
@@ -178,35 +178,35 @@ namespace OpenMS
 
 
   // get userparameter
-  String getColumnName(String label)
+  String getColumnName(const String label)
   { 
-    String userparameter;
+    String label_userparam;
     if (label.hasPrefix("_S_"))
     {
-      userparameter = label.substr(3);
+      label_userparam = label.substr(3);
     } else
     if (label.hasPrefix("_I_"))
     {
-      userparameter = label.substr(3);
+      label_userparam = label.substr(3);
     } else
     if (label.hasPrefix("_D_"))
     {
-      userparameter = label.substr(3);
+      label_userparam = label.substr(3);
     } else
     if (label.hasPrefix("_SL_"))
     {
-      userparameter = label.substr(4);
+      label_userparam = label.substr(4);
     } else
     if (label.hasPrefix("_IL_"))
     {
-      userparameter = label.substr(4);
+      label_userparam = label.substr(4);
     } else
     if (label.hasPrefix("_DL_"))
     {
-      userparameter = label.substr(4);
+      label_userparam = label.substr(4);
     } else 
     {
-      userparameter = label;
+      label_userparam = label;
       /*
       if (!label.hasPrefix("_"))
       {
@@ -214,8 +214,91 @@ namespace OpenMS
       }
       */
     }
-    return userparameter;
+    return label_userparam;
   }
+
+
+
+
+
+  // write userparameter to feature
+  void setUserParams(Feature& current_feature, String &column_name, const int column_type, int i, sqlite3_stmt* stmt)
+  {
+    //std::cout << column_name << "\t" << column_type << "\t" << i << "\t" << std::endl;
+    if(column_type == DataValue::STRING_VALUE)
+    {
+      column_name = column_name.substr(3);
+      String value;
+      Sql::extractValue<String>(&value, stmt, i);
+      current_feature.setMetaValue(column_name, value); 
+    } else
+
+    if(column_type == DataValue::INT_VALUE)
+    {
+      column_name = column_name.substr(3);
+      int value = 0;
+      Sql::extractValue<int>(&value, stmt, i);
+      current_feature.setMetaValue(column_name, value); 
+    } else
+
+    if(column_type == DataValue::DOUBLE_VALUE)
+    {
+      column_name = column_name.substr(3);
+      double value = 0.0;
+      Sql::extractValue<double>(&value, stmt, i);          
+      current_feature.setMetaValue(column_name, value); 
+    } else
+
+    if(column_type == DataValue::STRING_LIST)
+    {
+      column_name = column_name.substr(4);
+      String value; 
+      Sql::extractValue<String>(&value, stmt, i);
+
+      StringList sl;
+      // cut off "[" and "]""
+      value = value.chop(1);
+      value = value.substr(1);
+      value.split(", ", sl);
+      current_feature.setMetaValue(column_name, sl);
+    } else
+
+    if(column_type == DataValue::INT_LIST)
+    {
+      column_name = column_name.substr(4);
+      String value; //IntList value;
+      Sql::extractValue<String>(&value, stmt, i); //IntList
+      value = value.chop(1);
+      value = value.substr(1);
+      std::vector<String> value_list;
+      IntList il = ListUtils::create<int>(value, ',');
+      current_feature.setMetaValue(column_name, il);
+    } else
+
+    if(column_type == DataValue::DOUBLE_LIST)
+    {
+      column_name = column_name.substr(4);
+      String value; //DoubleList value;
+      Sql::extractValue<String>(&value, stmt, i); //DoubleList
+      value = value.chop(1);
+      value = value.substr(1);          
+      DoubleList dl = ListUtils::create<double>(value, ',');
+      current_feature.setMetaValue(column_name, dl);
+    } else
+
+    if(column_type == DataValue::EMPTY_VALUE)
+    {
+      String value;
+      Sql::extractValue<String>(&value, stmt, i);
+    }
+  }
+
+
+
+
+
+
+
 
 
 
@@ -1177,22 +1260,28 @@ namespace OpenMS
 
 
 
-      /*
-        //actions
-        //std::set<DataProcessing::ProcessingAction> proc_actions;
-        //proc_actions.insert()
-        std::set<DataProcessing::ProcessingAction> actions;
+      
+      //actions
+      std::set<DataProcessing::ProcessingAction> proc_actions;
+
+    
+      //dp.setProcessingActions(actions);
+
+
+      for (int i = 0; i < DataProcessing::SIZE_OF_PROCESSINGACTION; ++i)
+      {
+        if (action == DataProcessing::NamesOfProcessingAction[i])
+        {
+          std::cout << i << std::endl;
+          proc_actions.insert((DataProcessing::ProcessingAction) i);
+        }
+      }
 
       
-        //dp.setProcessingActions(actions);
+      dp.setProcessingActions(proc_actions);
 
 
-
-      */
-
-
-
-
+      //feature_map.setDataProcessing(dp);
 
 
 
