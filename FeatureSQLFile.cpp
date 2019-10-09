@@ -219,6 +219,8 @@ namespace OpenMS
 
 
 
+
+
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                store FeatureMap as SQL database                                                      //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -746,14 +748,13 @@ namespace OpenMS
 
 
 
+
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                read FeatureMap as SQL database                                                      //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // read SQL database and store as FeatureMap
   // fitted snippet of FeatureXMLFile::load
   // based on TransitionPQPFile::readPQPInput
-
-
 
   FeatureMap FeatureSQLFile::read(const std::string& filename) const
   {
@@ -777,14 +778,6 @@ namespace OpenMS
 
 
 
-    //"FEATURES_SUBORDINATES" 
-    //"FEATURES_DATAPROCESSING"
-
-    // get feature table entries
-    //SqliteConnector::executePreparedStatement(db, &stmt, "SELECT * FROM ;");
-    String sql = "SELECT * FROM FEATURES_TABLE;";
-    SqliteConnector::executePreparedStatement(db, &stmt, sql);
-    sqlite3_step(stmt);
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                     store sqite3 database as FeatureMap                                              //
@@ -793,16 +786,13 @@ namespace OpenMS
     //                                                     3. dataprocessing                                                                //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-
-    /// 1. get feature data from database
+    /// 1. get   feature data from database
     /// traverse across features
-    sql = "SELECT * FROM FEATURES_TABLE;";
+    // get feature table entries
+    //SqliteConnector::executePreparedStatement(db, &stmt, "SELECT * FROM ;");
+    String sql = "SELECT * FROM FEATURES_TABLE;";
     SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-
-    //std::unordered_set<int> feature_ids = {}; //int64_t
-    std::unordered_set<long> feature_ids = {}; //long for compatibility
     
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
@@ -826,6 +816,7 @@ namespace OpenMS
       double quality = 0.0;
       Sql::extractValue<double>(&quality, stmt, 5);
 
+
       // get values
       // id, RT, MZ, Intensity, Charge, Quality
       // save SQL column elements as feature
@@ -836,8 +827,6 @@ namespace OpenMS
       current_feature.setCharge(charge);
       current_feature.setOverallQuality(quality);
            
-      // print index and column names
-      //std::cout << "columns : \t" << cols << std::endl; 
 
       // save userparam column names
       // read colum names, infer DataValue and write data to current_feature
@@ -846,7 +835,8 @@ namespace OpenMS
       int cols = sqlite3_column_count(stmt);
       String column_name;
       int column_type = 0;
- 
+
+
       // spare first values up to index 5 of feature parameters
       // parse userparameters with respective DataValue::DataType
       // TODO: Integer values incorrectly typed as String
@@ -860,7 +850,6 @@ namespace OpenMS
           column_name = column_name.substr(3);
           String value;
           Sql::extractValue<String>(&value, stmt, i);
-          
           current_feature.setMetaValue(column_name, value); 
           continue;
         } else
@@ -870,7 +859,6 @@ namespace OpenMS
           column_name = column_name.substr(3);
           int value = 0;
           Sql::extractValue<int>(&value, stmt, i);
-          
           current_feature.setMetaValue(column_name, value); 
           continue;
         } else
@@ -880,7 +868,6 @@ namespace OpenMS
           column_name = column_name.substr(3);
           double value = 0.0;
           Sql::extractValue<double>(&value, stmt, i);          
-          
           current_feature.setMetaValue(column_name, value); 
           continue;
         } else
@@ -896,11 +883,9 @@ namespace OpenMS
           value = value.chop(1);
           value = value.substr(1);
           value.split(", ", sl);
-          
           current_feature.setMetaValue(column_name, sl);
           continue;
         } else
-
         
         if(column_type == DataValue::INT_LIST)
         {
@@ -911,7 +896,6 @@ namespace OpenMS
           value = value.substr(1);
           std::vector<String> value_list;
           IntList il = ListUtils::create<int>(value, ',');
-          
           current_feature.setMetaValue(column_name, il);
           continue;
         } else
@@ -924,9 +908,6 @@ namespace OpenMS
           value = value.chop(1);
           value = value.substr(1);          
           DoubleList dl = ListUtils::create<double>(value, ',');
-
-          
-
           current_feature.setMetaValue(column_name, dl);
           continue;
         } else
@@ -937,20 +918,17 @@ namespace OpenMS
           Sql::extractValue<String>(&value, stmt, i);
           continue;
         }
-
- 
       }
 
-      
-
-
-
-      // save feature in FeatureMap object
+      /// save feature in FeatureMap object
       feature_map.push_back(current_feature);
       //feature_map.ensureUniqueId();
-
       sqlite3_step(stmt);
     }
+    sqlite3_finalize(stmt);
+
+
+
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// 2. prepare subordinate data from database for later insertion
@@ -961,7 +939,6 @@ namespace OpenMS
     // map <int, <vector> features>     std::map<long, std::vector<Feature>> id_subs;
     // use insert 
     
-
     // query SELECT * FROM FEATURES_SUBORDINATES INNER JOIN FEATURES_TABLE ON FEATURES_SUBORDINATES.REF_ID = FEATURES_TABLE.ID
 
     /// get subordinate ref_id vector and subordinate vector
@@ -971,7 +948,6 @@ namespace OpenMS
 
     // container to save subordinate construct
     std::map<long, std::vector< std::pair<int, Feature>>> id_subs;
-
 
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
@@ -1036,7 +1012,6 @@ namespace OpenMS
           column_name = column_name.substr(3);
           String value;
           Sql::extractValue<String>(&value, stmt, i);
-          
           current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
@@ -1046,7 +1021,6 @@ namespace OpenMS
           column_name = column_name.substr(3);
           int value = 0;
           Sql::extractValue<int>(&value, stmt, i);
-          
           current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
@@ -1056,7 +1030,6 @@ namespace OpenMS
           column_name = column_name.substr(3);
           double value = 0.0;
           Sql::extractValue<double>(&value, stmt, i);          
-          
           current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
@@ -1066,18 +1039,15 @@ namespace OpenMS
           column_name = column_name.substr(4);
           String value; 
           Sql::extractValue<String>(&value, stmt, i);
-
           StringList sl;
           // cut off "[" and "]""
           value = value.chop(1);
           value = value.substr(1);
           value.split(", ", sl);
-          
           current_sub_feature.setMetaValue(column_name, sl);
           continue;
         } else
 
-        
         if(column_type == DataValue::INT_LIST)
         {
           column_name = column_name.substr(4);
@@ -1087,7 +1057,6 @@ namespace OpenMS
           value = value.substr(1);
           std::vector<String> value_list;
           IntList il = ListUtils::create<int>(value, ',');
-          
           current_sub_feature.setMetaValue(column_name, il);
           continue;
         } else
@@ -1100,7 +1069,6 @@ namespace OpenMS
           value = value.chop(1);
           value = value.substr(1);          
           DoubleList dl = ListUtils::create<double>(value, ',');
-          
           current_sub_feature.setMetaValue(column_name, dl);
           continue;
         } else
@@ -1112,7 +1080,6 @@ namespace OpenMS
           continue;
         }
       }
-    
 
       std::pair<int, Feature> id_subordinate = std::make_pair(sub_idx, current_sub_feature);
       id_subs[r_id].push_back(id_subordinate);
@@ -1120,11 +1087,12 @@ namespace OpenMS
       /// iterate across table lines
       sqlite3_step(stmt);
     }
+    sqlite3_finalize(stmt);
+
 
     /// save subordinates to feature_map
-
     /// loop across features in featuremap
-    for (auto feature : feature_map)
+    for (auto& feature : feature_map)
     {
       /// get feature id 
       long id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));
@@ -1150,212 +1118,200 @@ namespace OpenMS
     
       /// set subordinates
       feature.setSubordinates(subordinates);
-      feature_map.push_back((feature));
+      //feature_map.push_back((feature));
 
     }
 
-
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  //                                                     3. add dataprocessing to FeatureMap                                              //
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  sql = "SELECT * FROM FEATURES_DATAPROCESSING;";
-  SqliteConnector::executePreparedStatement(db, &stmt, sql);
-  sqlite3_step(stmt);
-
-
-  while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
-  {
-    // set dataprocessing parameters
-    String id_s;
-    long id = 0;
-    // extract as String
-    Sql::extractValue<String>(&id_s, stmt, 0);
-    id = stol(id_s);
-
-  
-    String software;
-    Sql::extractValue<String>(&software, stmt, 1);
-    String data;
-    Sql::extractValue<String>(&data, stmt, 2);
-    String time;
-    Sql::extractValue<String>(&time, stmt, 3);
-    String action;
-    Sql::extractValue<String>(&action, stmt, 4);
-
-    // get values
-    // id, RT, MZ, Intensity, Charge, Quality
-    // save SQL column elements as feature
-    feature_map.setUniqueId(id);
-
-
-    //std::cout << software << "\n" << data << "\n" << time << "\n" << action << "\n" << std::endl;
-
-    DataProcessing dp;
-
-    //std::vector<DataProcessing> dp;
-    //actions.insert(action);
-
-    //software
-    //dp.getSoftware().setName(software);
-    dp.getSoftware().setName(software);
-
-    //time
-    DateTime date_time;
-    date_time.set(data + " " + time);
-    dp.setCompletionTime(date_time);
-
-
-
-
-
-
-    //actions
-    //std::set<DataProcessing::ProcessingAction> proc_actions;
-    //proc_actions.insert()
-    std::set<DataProcessing::ProcessingAction> actions;
-
-  
-    for (int i = 0; i < DataProcessing::SIZE_OF_PROCESSINGACTION; ++i)
-    {
-      std::cout << "***********************************" << std::endl;
-      std::cout << i << std::endl;
-      std::cout << "***********************************" << std::endl;
-    /*
-      if (action == DataProcessing::NamesOfProcessingAction[i])
-      {
-        std::cout << "***********************************" << std::endl;
-        std::cout << action << std::endl;
-        std::cout << "***********************************" << std::endl;
-        //actions.insert(action);
-      }
-    */
-    }
-    //dp.setProcessingActions(actions);
-
-
-
-
-
-
-
-
-
-
-
-    // access number of columns and infer DataType
-    int cols = sqlite3_column_count(stmt);
-    
-    String column_name;
-    int column_type = 0;
-
-    // spare first seven values with feature parameters
-    // parse values with respective DataValue::DataType
-    for (int i = 5; i < cols ; ++i)
-    {
-      column_name = sqlite3_column_name(stmt, i);
-      column_type = getColumnDatatype(column_name);
-      if(column_type == DataValue::STRING_VALUE)
-      {
-        String value;
-        column_name = column_name.substr(3);
-        Sql::extractValue<String>(&value, stmt, i);
-        dp.setMetaValue(column_name, value); 
-        continue;
-      } else
-      
-      if(column_type == DataValue::INT_VALUE)
-      {
-        int value = 0;
-        column_name = column_name.substr(3);
-        Sql::extractValue<int>(&value, stmt, i);
-        dp.setMetaValue(column_name, value); 
-        continue;
-      } else
-      
-      if(column_type == DataValue::DOUBLE_VALUE)
-      {
-        double value = 0.0;
-        column_name = column_name.substr(3);
-        Sql::extractValue<double>(&value, stmt, i);          
-        dp.setMetaValue(column_name, value); 
-        continue;
-      } else
-      
-      if(column_type == DataValue::STRING_LIST)
-      {
-        String value; 
-        Sql::extractValue<String>(&value, stmt, i);
-        column_name = column_name.substr(4);
-
-        StringList sl;
-        // cut off "[" and "]""
-        value = value.chop(1);
-        value = value.substr(1);
-        value.split(", ", sl);
-        dp.setMetaValue(column_name, sl);
-        continue;
-      } else
-
-      
-      if(column_type == DataValue::INT_LIST)
-      {
-        String value; //IntList value;
-        Sql::extractValue<String>(&value, stmt, i); //IntList
-        column_name = column_name.substr(4);
-
-        value = value.chop(1);
-        value = value.substr(1);
-        std::vector<String> value_list;
-        IntList il = ListUtils::create<int>(value, ',');
-        dp.setMetaValue(column_name, il);
-        continue;
-      } else
-      
-      if(column_type == DataValue::DOUBLE_LIST)
-      {
-        String value; //DoubleList value;
-        Sql::extractValue<String>(&value, stmt, i); //DoubleList
-        column_name = column_name.substr(4);
-
-        value = value.chop(1);
-        value = value.substr(1);          
-        DoubleList dl = ListUtils::create<double>(value, ',');
-        dp.setMetaValue(column_name, dl);
-        continue;
-      } else
-    
-      if(column_type == DataValue::EMPTY_VALUE)
-      {
-        String value;
-        Sql::extractValue<String>(&value, stmt, i);
-        continue;
-      }
-    }
-
-
-
-
-    feature_map.getDataProcessing().push_back(dp);
-
-    /// iterate across table lines ?
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                                                     3. add dataprocessing to FeatureMap                                              //
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    sql = "SELECT * FROM FEATURES_DATAPROCESSING;";
+    SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-    //feature_map.setDataProcessing(dp);
-
-  }
 
 
-  // close SQL database connection
-  sqlite3_finalize(stmt);
+    while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
+    {
+      // set dataprocessing parameters
+      String id_s;
+      long id = 0;
+      // extract as String
+      Sql::extractValue<String>(&id_s, stmt, 0);
+      id = stol(id_s);
+
+    
+      String software;
+      Sql::extractValue<String>(&software, stmt, 1);
+      String data;
+      Sql::extractValue<String>(&data, stmt, 2);
+      String time;
+      Sql::extractValue<String>(&time, stmt, 3);
+      String action;
+      Sql::extractValue<String>(&action, stmt, 4);
+
+      // get values
+      // id, RT, MZ, Intensity, Charge, Quality
+      // save SQL column elements as feature
 
 
-  // return FeatureMap 
-  return feature_map;
+      feature_map.setUniqueId(id);
+
+
+      //std::cout << software << "\n" << data << "\n" << time << "\n" << action << "\n" << std::endl;
+
+      DataProcessing dp;
+
+      //std::vector<DataProcessing> dp;
+      //actions.insert(action);
+
+      //software
+      //dp.getSoftware().setName(software);
+      dp.getSoftware().setName(software);
+
+      //time
+      DateTime date_time;
+      date_time.set(data + " " + time);
+      dp.setCompletionTime(date_time);
+
+
+
+
+
+      /*
+        //actions
+        //std::set<DataProcessing::ProcessingAction> proc_actions;
+        //proc_actions.insert()
+        std::set<DataProcessing::ProcessingAction> actions;
+
+      
+        //dp.setProcessingActions(actions);
+
+
+
+      */
+
+
+
+
+
+
+
+      // access number of columns and infer DataType
+      int cols = sqlite3_column_count(stmt);
+      
+      String column_name;
+      int column_type = 0;
+
+      // spare first seven values with feature parameters
+      // parse values with respective DataValue::DataType
+      for (int i = 5; i < cols ; ++i)
+      {
+        column_name = sqlite3_column_name(stmt, i);
+        column_type = getColumnDatatype(column_name);
+        if(column_type == DataValue::STRING_VALUE)
+        {
+          String value;
+          column_name = column_name.substr(3);
+          Sql::extractValue<String>(&value, stmt, i);
+          dp.setMetaValue(column_name, value); 
+          continue;
+        } else
+        
+        if(column_type == DataValue::INT_VALUE)
+        {
+          int value = 0;
+          column_name = column_name.substr(3);
+          Sql::extractValue<int>(&value, stmt, i);
+          dp.setMetaValue(column_name, value); 
+          continue;
+        } else
+        
+        if(column_type == DataValue::DOUBLE_VALUE)
+        {
+          double value = 0.0;
+          column_name = column_name.substr(3);
+          Sql::extractValue<double>(&value, stmt, i);          
+          dp.setMetaValue(column_name, value); 
+          continue;
+        } else
+        
+        if(column_type == DataValue::STRING_LIST)
+        {
+          String value; 
+          Sql::extractValue<String>(&value, stmt, i);
+          column_name = column_name.substr(4);
+
+          StringList sl;
+          // cut off "[" and "]""
+          value = value.chop(1);
+          value = value.substr(1);
+          value.split(", ", sl);
+          dp.setMetaValue(column_name, sl);
+          continue;
+        } else
+
+        
+        if(column_type == DataValue::INT_LIST)
+        {
+          String value; //IntList value;
+          Sql::extractValue<String>(&value, stmt, i); //IntList
+          column_name = column_name.substr(4);
+
+          value = value.chop(1);
+          value = value.substr(1);
+          std::vector<String> value_list;
+          IntList il = ListUtils::create<int>(value, ',');
+          dp.setMetaValue(column_name, il);
+          continue;
+        } else
+        
+        if(column_type == DataValue::DOUBLE_LIST)
+        {
+          String value; //DoubleList value;
+          Sql::extractValue<String>(&value, stmt, i); //DoubleList
+          column_name = column_name.substr(4);
+
+          value = value.chop(1);
+          value = value.substr(1);          
+          DoubleList dl = ListUtils::create<double>(value, ',');
+          dp.setMetaValue(column_name, dl);
+          continue;
+        } else
+      
+        if(column_type == DataValue::EMPTY_VALUE)
+        {
+          String value;
+          Sql::extractValue<String>(&value, stmt, i);
+          continue;
+        }
+      }
+
+
+
+      feature_map.getDataProcessing().push_back(dp);
+
+
+      /// iterate across table lines ?
+      sqlite3_step(stmt);
+      //feature_map.setDataProcessing(dp);
+
+
+    
+    }
+
+
+    // close SQL database connection
+    sqlite3_finalize(stmt);
+
+
+    // return FeatureMap 
+
+
+
+    return feature_map;
   }  
 
-
   // end of FeatureSQLFile::read
-
-
   
 } // namespace OpenMS
 
@@ -1603,4 +1559,21 @@ std::cout << dataproc_map_key2type.size() << "\n";
         ++ref_counter;
       }
     
+    */
+
+    /*
+
+
+    for (int i = 0; i < DataProcessing::SIZE_OF_PROCESSINGACTION; ++i)
+    {
+      std::cout << "***********************************" << std::endl;
+      std::cout << i << std::endl;
+      std::cout << "***********************************" << std::endl;
+      if (action == DataProcessing::NamesOfProcessingAction[i])
+      {
+        std::cout << "***********************************" << std::endl;
+        std::cout << action << std::endl;
+        std::cout << "***********************************" << std::endl;
+        //actions.insert(action);
+      }
     */
