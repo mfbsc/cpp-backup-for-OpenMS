@@ -37,6 +37,7 @@
 #include <OpenMS/CONCEPT/Exception.h>
 #include <OpenMS/CONCEPT/UniqueIdInterface.h>
 
+#include <OpenMS/DATASTRUCTURES/DBoundingBox.h>
 #include <OpenMS/DATASTRUCTURES/DateTime.h>
 #include <OpenMS/DATASTRUCTURES/DataValue.h>
 #include <OpenMS/DATASTRUCTURES/ListUtils.h>
@@ -48,6 +49,7 @@
 #include <OpenMS/FORMAT/SqliteConnector.h>
 
 #include <OpenMS/KERNEL/FeatureMap.h>
+#include <OpenMS/KERNEL/ConsensusMap.h>
 #include <OpenMS/KERNEL/StandardTypes.h>
 
 #include <OpenMS/METADATA/DataProcessing.h>
@@ -288,6 +290,59 @@ namespace OpenMS
         }
       }
     }
+
+    /*
+
+
+    //current_chull_ = ConvexHull2D::PointArrayType();
+    //hull_position_ = DPosition<2>();
+
+    for (auto feature : feature_map)
+    {
+      // loop over all convex hulls
+      vector<ConvexHull2D>& convex_hulls = feature.getConvexHulls();
+      for (vector<ConvexHull2D>::iterator chiter = convex_hulls.begin();
+          chiter != convex_hulls.end(); ++chiter)
+      {
+        // transform all hull point positions within convex hull
+        ConvexHull2D::PointArrayType points = chiter->getHullPoints();
+        chiter->clear();
+        for (ConvexHull2D::PointArrayType::iterator points_iter = points.begin();
+            points_iter != points.end(); ++points_iter)
+        {
+          double rt = (*points_iter)[Feature::RT];
+          std::cout << rt << std::endl;
+          (*points_iter)[Feature::RT] = trafo.apply(rt);
+        }
+        chiter->setHullPoints(points);
+      }
+    }
+
+    for (auto feature : feature_map)
+    //for (it = feature_map.begin(); it != feature_map.end(); ++it)
+    {
+      ConvexHull2D hull;
+      //hull.setHullPoints(current_chull_);
+      feature.getConvexHulls().push_back(hull);
+      double test = std::min(hull.getConvexHulls().getBoundingBox().minX());
+
+      for (Size i = 0; i < feature.getConvexHulls().size(); ++i)
+      {
+        double f_start1 = std::min(feature.getConvexHull().getBoundingBox().minX());
+        double f_start2 = std::max(feature.getConvexHull().getBoundingBox().maxX());
+
+        std::cout << f_start1 << std::endl;
+        std::cout << f_start1 << std::endl;
+      }
+      //it->getSubordinates().clear();
+    */
+    
+
+
+
+
+
+
 
 
 
@@ -691,17 +746,6 @@ namespace OpenMS
 
 
 
-
-
-
-
-
-
-
-
-
-
-
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                read FeatureMap as SQL database                                                      //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -813,30 +857,37 @@ namespace OpenMS
         column_type = getColumnDatatype(column_name);
         if(column_type == DataValue::STRING_VALUE)
         {
+          column_name = column_name.substr(3);
           String value;
           Sql::extractValue<String>(&value, stmt, i);
+          
           current_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
         if(column_type == DataValue::INT_VALUE)
         {
+          column_name = column_name.substr(3);
           int value = 0;
           Sql::extractValue<int>(&value, stmt, i);
+          
           current_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
         if(column_type == DataValue::DOUBLE_VALUE)
         {
+          column_name = column_name.substr(3);
           double value = 0.0;
           Sql::extractValue<double>(&value, stmt, i);          
+          
           current_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
         if(column_type == DataValue::STRING_LIST)
         {
+          column_name = column_name.substr(4);
           String value; 
           Sql::extractValue<String>(&value, stmt, i);
 
@@ -845,6 +896,7 @@ namespace OpenMS
           value = value.chop(1);
           value = value.substr(1);
           value.split(", ", sl);
+          
           current_feature.setMetaValue(column_name, sl);
           continue;
         } else
@@ -852,23 +904,29 @@ namespace OpenMS
         
         if(column_type == DataValue::INT_LIST)
         {
+          column_name = column_name.substr(4);
           String value; //IntList value;
           Sql::extractValue<String>(&value, stmt, i); //IntList
           value = value.chop(1);
           value = value.substr(1);
           std::vector<String> value_list;
           IntList il = ListUtils::create<int>(value, ',');
+          
           current_feature.setMetaValue(column_name, il);
           continue;
         } else
         
         if(column_type == DataValue::DOUBLE_LIST)
         {
+          column_name = column_name.substr(4);
           String value; //DoubleList value;
           Sql::extractValue<String>(&value, stmt, i); //DoubleList
           value = value.chop(1);
           value = value.substr(1);          
           DoubleList dl = ListUtils::create<double>(value, ',');
+
+          
+
           current_feature.setMetaValue(column_name, dl);
           continue;
         } else
@@ -879,15 +937,20 @@ namespace OpenMS
           Sql::extractValue<String>(&value, stmt, i);
           continue;
         }
+
+ 
       }
+
+      
+
+
 
       // save feature in FeatureMap object
       feature_map.push_back(current_feature);
-      feature_map.ensureUniqueId();
+      //feature_map.ensureUniqueId();
 
       sqlite3_step(stmt);
     }
-
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// 2. prepare subordinate data from database for later insertion
@@ -970,30 +1033,37 @@ namespace OpenMS
         column_type = getColumnDatatype(column_name);
         if(column_type == DataValue::STRING_VALUE)
         {
+          column_name = column_name.substr(3);
           String value;
           Sql::extractValue<String>(&value, stmt, i);
+          
           current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
         if(column_type == DataValue::INT_VALUE)
         {
+          column_name = column_name.substr(3);
           int value = 0;
           Sql::extractValue<int>(&value, stmt, i);
+          
           current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
         if(column_type == DataValue::DOUBLE_VALUE)
         {
+          column_name = column_name.substr(3);
           double value = 0.0;
           Sql::extractValue<double>(&value, stmt, i);          
+          
           current_sub_feature.setMetaValue(column_name, value); 
           continue;
         } else
         
         if(column_type == DataValue::STRING_LIST)
         {
+          column_name = column_name.substr(4);
           String value; 
           Sql::extractValue<String>(&value, stmt, i);
 
@@ -1002,6 +1072,7 @@ namespace OpenMS
           value = value.chop(1);
           value = value.substr(1);
           value.split(", ", sl);
+          
           current_sub_feature.setMetaValue(column_name, sl);
           continue;
         } else
@@ -1009,23 +1080,27 @@ namespace OpenMS
         
         if(column_type == DataValue::INT_LIST)
         {
+          column_name = column_name.substr(4);
           String value; //IntList value;
           Sql::extractValue<String>(&value, stmt, i); //IntList
           value = value.chop(1);
           value = value.substr(1);
           std::vector<String> value_list;
           IntList il = ListUtils::create<int>(value, ',');
+          
           current_sub_feature.setMetaValue(column_name, il);
           continue;
         } else
         
         if(column_type == DataValue::DOUBLE_LIST)
         {
+          column_name = column_name.substr(4);
           String value; //DoubleList value;
           Sql::extractValue<String>(&value, stmt, i); //DoubleList
           value = value.chop(1);
           value = value.substr(1);          
           DoubleList dl = ListUtils::create<double>(value, ',');
+          
           current_sub_feature.setMetaValue(column_name, dl);
           continue;
         } else
@@ -1038,6 +1113,7 @@ namespace OpenMS
         }
       }
     
+
       std::pair<int, Feature> id_subordinate = std::make_pair(sub_idx, current_sub_feature);
       id_subs[r_id].push_back(id_subordinate);
 
@@ -1067,7 +1143,6 @@ namespace OpenMS
 
       for (int pos = 0; pos != vec_size; ++pos)
       {
-        std::cout << pairs[pos].first << std::endl;
         int current_sub_pos = pairs[pos].first;
         Feature current_sub = pairs[pos].second;
         subordinates[current_sub_pos] = current_sub;
@@ -1075,9 +1150,9 @@ namespace OpenMS
     
       /// set subordinates
       feature.setSubordinates(subordinates);
-    
-    }
+      feature_map.push_back((feature));
 
+    }
 
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1112,8 +1187,6 @@ namespace OpenMS
     // save SQL column elements as feature
     feature_map.setUniqueId(id);
 
-    
-
 
     //std::cout << software << "\n" << data << "\n" << time << "\n" << action << "\n" << std::endl;
 
@@ -1123,16 +1196,50 @@ namespace OpenMS
     //actions.insert(action);
 
     //software
+    //dp.getSoftware().setName(software);
     dp.getSoftware().setName(software);
 
     //time
     DateTime date_time;
-    date_time.set(data + time);
+    date_time.set(data + " " + time);
     dp.setCompletionTime(date_time);
+
+
+
+
+
 
     //actions
     //std::set<DataProcessing::ProcessingAction> proc_actions;
     //proc_actions.insert()
+    std::set<DataProcessing::ProcessingAction> actions;
+
+  
+    for (int i = 0; i < DataProcessing::SIZE_OF_PROCESSINGACTION; ++i)
+    {
+      std::cout << "***********************************" << std::endl;
+      std::cout << i << std::endl;
+      std::cout << "***********************************" << std::endl;
+    /*
+      if (action == DataProcessing::NamesOfProcessingAction[i])
+      {
+        std::cout << "***********************************" << std::endl;
+        std::cout << action << std::endl;
+        std::cout << "***********************************" << std::endl;
+        //actions.insert(action);
+      }
+    */
+    }
+    //dp.setProcessingActions(actions);
+
+
+
+
+
+
+
+
+
 
 
     // access number of columns and infer DataType
@@ -1150,6 +1257,7 @@ namespace OpenMS
       if(column_type == DataValue::STRING_VALUE)
       {
         String value;
+        column_name = column_name.substr(3);
         Sql::extractValue<String>(&value, stmt, i);
         dp.setMetaValue(column_name, value); 
         continue;
@@ -1158,6 +1266,7 @@ namespace OpenMS
       if(column_type == DataValue::INT_VALUE)
       {
         int value = 0;
+        column_name = column_name.substr(3);
         Sql::extractValue<int>(&value, stmt, i);
         dp.setMetaValue(column_name, value); 
         continue;
@@ -1166,6 +1275,7 @@ namespace OpenMS
       if(column_type == DataValue::DOUBLE_VALUE)
       {
         double value = 0.0;
+        column_name = column_name.substr(3);
         Sql::extractValue<double>(&value, stmt, i);          
         dp.setMetaValue(column_name, value); 
         continue;
@@ -1175,6 +1285,7 @@ namespace OpenMS
       {
         String value; 
         Sql::extractValue<String>(&value, stmt, i);
+        column_name = column_name.substr(4);
 
         StringList sl;
         // cut off "[" and "]""
@@ -1190,6 +1301,8 @@ namespace OpenMS
       {
         String value; //IntList value;
         Sql::extractValue<String>(&value, stmt, i); //IntList
+        column_name = column_name.substr(4);
+
         value = value.chop(1);
         value = value.substr(1);
         std::vector<String> value_list;
@@ -1202,6 +1315,8 @@ namespace OpenMS
       {
         String value; //DoubleList value;
         Sql::extractValue<String>(&value, stmt, i); //DoubleList
+        column_name = column_name.substr(4);
+
         value = value.chop(1);
         value = value.substr(1);          
         DoubleList dl = ListUtils::create<double>(value, ',');
@@ -1216,9 +1331,18 @@ namespace OpenMS
         continue;
       }
     }
+
+
+
+
+    feature_map.getDataProcessing().push_back(dp);
+
     /// iterate across table lines ?
     sqlite3_step(stmt);
+    //feature_map.setDataProcessing(dp);
+
   }
+
 
   // close SQL database connection
   sqlite3_finalize(stmt);
