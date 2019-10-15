@@ -72,13 +72,9 @@
 
 // #include <Boost>
 
-
 namespace OpenMS
 { 
-
   namespace Sql = Internal::SqliteHelper;
-
-
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                            helper functions                                                          //
@@ -126,7 +122,6 @@ namespace OpenMS
     return pSTP;
   }
 
-  
   String createTable(const String& table_name, const String& table_stmt)
   {
     String create_table_stmt = "CREATE TABLE " + table_name + " (" + table_stmt + ");";
@@ -302,7 +297,6 @@ namespace OpenMS
 
 
 
-
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                store FeatureMap as SQL database                                                      //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -314,6 +308,18 @@ namespace OpenMS
     
     // delete file if present
     File::remove(filename);
+
+
+
+
+
+
+
+
+
+
+
+
 
  
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -360,8 +366,8 @@ namespace OpenMS
     std::vector<String> feat_bounding_box_elements = {"REF_ID", "MIN_MZ", "MIN_RT", "MAX_MZ", "MAX_RT", "BB_IDX"};
     std::vector<String> feat_bounding_box_elements_types = {"INTEGER" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
 
-    std::vector<String> sub_bounding_box_elements = {"REF_ID", "MIN_MZ", "MIN_RT", "MAX_MZ", "MAX_RT", "BB_IDX"};
-    std::vector<String> sub_bounding_box_elements_types = {"INTEGER" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
+    std::vector<String> sub_bounding_box_elements = {"ID", "REF_ID", "MIN_MZ", "MIN_RT", "MAX_MZ", "MAX_RT", "BB_IDX"};
+    std::vector<String> sub_bounding_box_elements_types = {"INTEGER" ,"INTEGER" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
 
     // read feature_map userparameter values and store as key value map
     // pass all CommonMetaKeys by setting frequency to 0.0 to a set 
@@ -379,6 +385,15 @@ namespace OpenMS
         }
       }
     }
+
+
+
+
+
+
+
+
+
 
 
 
@@ -432,8 +447,6 @@ namespace OpenMS
     std::cout << "\n" << min_MZ << "\n" << min_RT << "\n" << max_MZ <<  "\n" << max_RT << std::endl;
   */
 
-
-
     // read feature_map userparameter values of dataprocessing and store as key value map
     std::vector<String> dataproc_keys;
     const std::vector<DataProcessing> dataprocessing_userparams = feature_map.getDataProcessing();
@@ -484,20 +497,6 @@ namespace OpenMS
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// build feature header for sql table                                                                                                  //
     /// build subordinate header as sql table                                                                                               //
@@ -512,7 +511,6 @@ namespace OpenMS
       // feature_elements vector with SQL TYPES 
       feature_elements_types.push_back(enumToPrefix(map_key2type[key]).sqltype);
     }
-
 
     // prepare subordinate header
     std::map<String, DataValue::DataType> subordinate_key2type;
@@ -535,7 +533,6 @@ namespace OpenMS
       // subordinate_elements_type vector with SQL TYPES 
       subordinate_elements_types.push_back(enumToPrefix(subordinate_key2type[key2type.second]).sqltype);
     }
-
 
     // prepare dataprocessing header
     for (const auto& key2type : dataproc_map_key2type)
@@ -563,10 +560,12 @@ namespace OpenMS
       }
     }
 
-
-    // prepare boundingbox header atm no implementation needed
     // boundingbox is part of convexhull is part of feature and subordinates
     // points of MZ/RT-min-/maxima saved as quadrupel of doubles per convexhull number
+    // preparation of boundingbox header atm needs no implementation
+
+
+
 
 
 
@@ -649,14 +648,13 @@ namespace OpenMS
 
 
     // 4. boundingbox table
-    // features
+    // 4.1 features
     std::vector<String> sql_labels_boundingbox = {};
     for (std::size_t idx = 0; idx != feat_bounding_box_elements.size(); ++idx)
     {
       sql_labels_boundingbox.push_back(feat_bounding_box_elements[idx] + " " + feat_bounding_box_elements_types[idx]);
     }
-    // add PRIMARY KEY to first entry, assuming 1st column contains primary key
-    sql_labels_boundingbox[0].append(" PRIMARY KEY");
+    // no PRIMARY KEY because of executeStatement's UNIQUE constraint for primary keys
     // add "NOT NULL" to all entries
     std::for_each(sql_labels_boundingbox.begin(), sql_labels_boundingbox.end(), [] (String &s) {s.append(" NOT NULL");});
     // create single string with delimiter ',' as TABLE header template
@@ -664,13 +662,14 @@ namespace OpenMS
 
 
     // 4. boundingbox table
+    // 4.2 subordinates
     sql_labels_boundingbox = {};
     for (std::size_t idx = 0; idx != sub_bounding_box_elements.size(); ++idx)
     {
-      sql_labels_boundingbox.push_back(feat_bounding_box_elements[idx] + " " + sub_bounding_box_elements_types[idx]);
+      sql_labels_boundingbox.push_back(sub_bounding_box_elements[idx] + " " + sub_bounding_box_elements_types[idx]);
     }
     // add PRIMARY KEY to first entry, assuming 1st column contains primary key
-    sql_labels_boundingbox[0].append(" PRIMARY KEY");
+    //sql_labels_boundingbox[0].append(" PRIMARY KEY");
     // add "NOT NULL" to all entries
     std::for_each(sql_labels_boundingbox.begin(), sql_labels_boundingbox.end(), [] (String &s) {s.append(" NOT NULL");});
     // create single string with delimiter ',' as TABLE header template
@@ -701,11 +700,9 @@ namespace OpenMS
 
       feature_boundingbox_table_stmt + \
 
-      " " + subordinate_boundingbox_table_stmt \
-      
-      // closing statement semicolon
-      ;    
+      subordinate_boundingbox_table_stmt \
 
+      ;    
 
     // catch SQL contingencies
     //create_sql = create_sql.substitute("'", "\:"); // SQL escape single quote in strings  
@@ -713,6 +710,11 @@ namespace OpenMS
     // Open connection to database
     SqliteConnector conn(filename);
     conn.executeStatement(create_sql);
+
+
+
+
+
 
 
 
@@ -760,17 +762,7 @@ namespace OpenMS
     const String feature_elements_sql_stmt = ListUtils::concatenate(feature_elements, ","); 
     const String feat_bbox_elements_sql_stmt = ListUtils::concatenate(feat_bounding_box_elements, ","); 
 
-    /*
-    int testcnt = 0;
-    for (auto feature : feature_map)
-    {
-      std::cout << "testtesttesttesttesttesttesttesttest:  " << testcnt << std::endl;
-      testcnt++;
-    }
-    */
-
-    for (auto feature : feature_map)
-    //for (auto it = feature_map.begin(); it != feature_map.end(); ++it)
+    for (const Feature& feature : feature_map)
     {
       String line_stmt_features_table;
       std::vector<String> line;
@@ -778,7 +770,6 @@ namespace OpenMS
       int64_t id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));
       line.push_back(id);
       line.push_back(feature.getRT());
-      //line.push_back(it->getRT());
       line.push_back(feature.getMZ());
       line.push_back(feature.getIntensity());
       line.push_back(feature.getCharge());
@@ -808,27 +799,29 @@ namespace OpenMS
       conn.executeStatement(line_stmt_features_table);
     }
 
-
-
-    for (auto feature : feature_map)
+    // traverse features in featuremap 
+    // fetch convexhull bounding box data featurewise
+    for (const Feature& feature : feature_map)
     {
-      /// insert boundingbox data to table 
+      /// insert boundingbox data to table FEATURES_TABLE_BOUNDINGBOX
+      // init of string
       std::vector<String> feat_bbox_line;
+
       double min_MZ;
       double min_RT;
       double max_MZ;
       double max_RT;
 
       int bbox_idx = 0;
-
       int64_t id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));
 
-      // add bbox entries
+      // add bbox entries of current convexhull
       for (Size b = 0; b < feature.getConvexHulls().size(); ++b)
       {
         String line_stmt_features_table_boundingbox =  "INSERT INTO FEATURES_TABLE_BOUNDINGBOX (" + feat_bbox_elements_sql_stmt + ") VALUES (";
+        bbox_idx = b;
 
-        //clear vector line
+        //clear vector line for current bbox
         feat_bbox_line.clear();
 
         min_MZ = feature.getConvexHull().getBoundingBox().minX();
@@ -841,16 +834,14 @@ namespace OpenMS
         feat_bbox_line.push_back(bbox_idx);
 
         line_stmt_features_table_boundingbox += ListUtils::concatenate(feat_bbox_line, ",");
+        //store String in FEATURES_TABLE_BOUNDINGBOX
         line_stmt_features_table_boundingbox += ");";
-        //store in FEATURES_TABLE_BOUNDINGBOX
+        //std::cout << line_stmt_features_table_boundingbox << std::endl;
         conn.executeStatement(line_stmt_features_table_boundingbox);
 
-        ++bbox_idx;
-
-
       }
-
     }
+
 
     /// 2. insert data of subordinates table
     String line_stmt;
@@ -905,11 +896,71 @@ namespace OpenMS
     }
 
 
+  
+
+
+
+
+
+
+
+    const String sub_bbox_elements_sql_stmt = ListUtils::concatenate(sub_bounding_box_elements, ","); 
+
+    // traverse subordinates of features in featuremap 
+    // fetch bounding box data of convexhull featurewise
+    //for (auto feature : feature_map)
+    for (const Feature& feature : feature_map)
+    {
+      int64_t ref_id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));
+
+      for (const Feature& sub : feature.getSubordinates())
+      {
+        /// insert boundingbox data to table SUBORDINATES_TABLE_BOUNDINGBOX
+        // init of string
+        std::vector<String> bbox_line;
+
+        double min_MZ;
+        double min_RT;
+        double max_MZ;
+        double max_RT;
+
+        int bbox_idx = 0;
+        int64_t id = static_cast<int64_t>(sub.getUniqueId() & ~(1ULL << 63));
+
+        // add bbox entries of current convexhull
+        for (Size b = 0; b < sub.getConvexHulls().size(); ++b)
+        {
+          String line_stmt_subordinates_table_boundingbox =  "INSERT INTO SUBORDINATES_TABLE_BOUNDINGBOX (" + sub_bbox_elements_sql_stmt + ") VALUES (";
+          bbox_idx = b;
+
+          //clear vector line for current bbox
+          bbox_line.clear();
+
+          min_MZ = feature.getConvexHull().getBoundingBox().minX();
+          min_RT = feature.getConvexHull().getBoundingBox().minY();
+          max_MZ = feature.getConvexHull().getBoundingBox().maxX();
+          max_RT = feature.getConvexHull().getBoundingBox().maxY();
+
+          bbox_line.push_back(id);
+          bbox_line.push_back(ref_id);
+          bbox_line.insert(bbox_line.end(), {min_MZ,min_RT,max_MZ,max_RT});
+          bbox_line.push_back(bbox_idx);
+
+          line_stmt_subordinates_table_boundingbox += ListUtils::concatenate(bbox_line, ",");
+          //store String in SUBORDINATES_TABLE_BOUNDINGBOX
+          line_stmt_subordinates_table_boundingbox += ");";
+          std::cout << line_stmt_subordinates_table_boundingbox << std::endl;
+          conn.executeStatement(line_stmt_subordinates_table_boundingbox);
+        }
+      }
+    }
+
+
+
     /// 3. insert data of dataprocessing table
     const String dataprocessing_elements_sql_stmt = ListUtils::concatenate(dataprocessing_elements, ","); 
     std::vector<String> dataproc_elems = {};
     std::vector<String> processing_action_names;
-
 
 
     dataproc_elems.push_back(static_cast<int64_t>(feature_map.getUniqueId() & ~(1ULL << 63)));
@@ -962,14 +1013,9 @@ namespace OpenMS
       }
     }
 
-
-
     line_stmt =  "INSERT INTO FEATURES_DATAPROCESSING (" + dataprocessing_elements_sql_stmt + ") VALUES (";
     line_stmt += ListUtils::concatenate(dataproc_elems, ",");
     line_stmt += ");";
-
-
-
 
     //store in dataprocessing table
     conn.executeStatement(line_stmt);
