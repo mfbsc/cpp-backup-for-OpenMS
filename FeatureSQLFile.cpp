@@ -354,6 +354,7 @@ namespace OpenMS
 
 
     // declare table entries
+  ///*
     std::vector<String> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     std::vector<String> feature_elements_types = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
     
@@ -368,7 +369,24 @@ namespace OpenMS
 
     std::vector<String> sub_bounding_box_elements = {"ID", "REF_ID", "MIN_MZ", "MIN_RT", "MAX_MZ", "MAX_RT", "BB_IDX"};
     std::vector<String> sub_bounding_box_elements_types = {"INTEGER" ,"INTEGER" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
+  //*/
 
+  /*
+    std::vector<String> feature_elements = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
+    std::vector<String> feature_elements_types = {"TEXT", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
+    
+    std::vector<String> subordinate_elements = {"ID", "SUB_IDX" , "REF_ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
+    std::vector<String> subordinate_elements_types = {"TEXT", "INTEGER", "INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
+
+    std::vector<String> dataprocessing_elements = {"ID", "SOFTWARE", "DATA", "TIME", "ACTIONS"};
+    std::vector<String> dataprocessing_elements_types = {"TEXT" ,"TEXT" ,"TEXT" ,"TEXT" , "TEXT"};
+
+    std::vector<String> feat_bounding_box_elements = {"REF_ID", "MIN_MZ", "MIN_RT", "MAX_MZ", "MAX_RT", "BB_IDX"};
+    std::vector<String> feat_bounding_box_elements_types = {"TEXT" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
+
+    std::vector<String> sub_bounding_box_elements = {"ID", "REF_ID", "MIN_MZ", "MIN_RT", "MAX_MZ", "MAX_RT", "BB_IDX"};
+    std::vector<String> sub_bounding_box_elements_types = {"TEXT" ,"INTEGER" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
+  */
 
     // read feature_map userparameter values and store as key value map
     // pass all CommonMetaKeys by setting frequency to 0.0 to a set 
@@ -979,25 +997,6 @@ namespace OpenMS
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                   read FeatureMap as SQL database                                                    //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1396,7 +1395,7 @@ namespace OpenMS
 
 
 
-
+  
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                     3. add boundingbox to FeatureMap                                                 //
@@ -1404,17 +1403,12 @@ namespace OpenMS
     // 1. features
     // container to save bounding box 
     // save ID, bb_idx, tuple of 
-    std::map <long, std::vector <std::pair< int, std::tuple < double, double, double, double>>>> id_bboxes;
-
-    //current_chull_ = ConvexHull2D::PointArrayType();
-    //hull_position_ = DPosition<2>();
+    std::map <long, std::vector <std::pair< int, std::tuple < double, double, double, double>>>> feat_id_bboxes;
 
     // access correct feature
     sql = "SELECT * FROM FEATURES_TABLE_BOUNDINGBOX INNER JOIN FEATURES_TABLE ON FEATURES_TABLE_BOUNDINGBOX.REF_ID = FEATURES_TABLE.ID;";
     SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-
-    long prec_id = 0;
 
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
@@ -1423,7 +1417,6 @@ namespace OpenMS
       // extract as String
       Sql::extractValue<String>(&id_s, stmt, 0);
       id = stol(id_s);
-      prec_id = id;
       double min_mz;
       Sql::extractValue<double>(&min_mz, stmt, 1);
       double min_rt;
@@ -1440,8 +1433,12 @@ namespace OpenMS
       //if ((id == prec_id) || (prec_id == 0)) {
       std::tuple<double, double, double, double> current_bbox = std::make_tuple(min_mz, min_rt, max_mz, max_rt);
       std::pair<int, std::tuple<double, double, double, double>> idx_bbox = std::make_pair(bb_idx, current_bbox);
-      id_bboxes[id].push_back(idx_bbox);
+      feat_id_bboxes[id].push_back(idx_bbox);
+
+      sqlite3_step(stmt);
     }
+    sqlite3_finalize(stmt);
+
 
     /// save convexhull points to feature_map
     /// loop across features in featuremap
@@ -1451,14 +1448,15 @@ namespace OpenMS
       long id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));
       
       /// find feature id in boundingbox map as key
-      auto idx_box = id_bboxes.find(id);
+      auto idx_box = feat_id_bboxes.find(id);
 
       auto pairs = idx_box->second;
 
       /// return number of keys
       int vec_size = pairs.size();
 
-      std::cout << vec_size << std::endl;
+      //std::cout << vec_size << std::endl;
+
 
       for (int pos = 0; pos != vec_size; ++pos)
       {
@@ -1467,25 +1465,19 @@ namespace OpenMS
         double max_mz = std::get<2>(pairs[pos].second);
         double max_rt = std::get<3>(pairs[pos].second);
 
-        /*
-          // set cHull data
-          hull_position_[0] = min_mz;
-          hull_position_[1] = min_rt;
-        */
-        //current_chull_.push_back(hull_position_);
-        
-        //DPosition<2> p_min = {min_mz, min_rt};
-        //DPosition<2> p_min(min_mz, min_rt);
-        //DPosition<2> p_max = {max_mz, max_rt};
-        //DPosition<2> p_max(max_mz, max_rt);
-        
+        //std::cout << min_mz << "\t " <<  min_rt << "\t " << max_mz <<  "\t " << max_rt << std::endl;
+
         ConvexHull2D hull;
-        //hull.setHullPoints(current_chull_);
         hull.addPoint({min_mz, min_rt});
         hull.addPoint({max_mz, max_rt});
         feature.getConvexHulls().push_back(hull);
       }
+
     }
+    // clear memory of feat_id_bbox
+    feat_id_bboxes.clear();
+
+    
 
 
 
@@ -1496,22 +1488,25 @@ namespace OpenMS
 
 
 
-   /*
 
+
+
+
+
+
+
+
+
+
+    // map of( map of?) vector (save feature id, save subor id, save convexhull at index pos 0)
     // 2. subordinates
     // container to save bounding box 
-    // save ID, bb_idx, tuple of 
-    std::map <long, std::vector <std::pair< int, std::tuple < double, double, double, double>>>> id_bboxes;
-
-    //current_chull_ = ConvexHull2D::PointArrayType();
-    //hull_position_ = DPosition<2>();
-
+    //    std::map <long, std::map <long, std::vector <std::pair <int, std::tuple <double, double, double, double>>>>> sub_id_bboxes;
+  
+  /*
     // access correct feature
-    sql = "SELECT * FROM FEATURES_TABLE_BOUNDINGBOX INNER JOIN FEATURES_TABLE ON FEATURES_TABLE_BOUNDINGBOX.REF_ID = FEATURES_TABLE.ID;";
+    sql = "SELECT * FROM SUBORDINATES_TABLE_BOUNDINGBOX INNER JOIN FEATURES_TABLE ON SUBORDINATES_TABLE_BOUNDINGBOX.REF_ID = FEATURES_TABLE.ID";
     SqliteConnector::executePreparedStatement(db, &stmt, sql);
-    sqlite3_step(stmt);
-
-    long prec_id = 0;
 
     while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
     {
@@ -1520,35 +1515,178 @@ namespace OpenMS
       // extract as String
       Sql::extractValue<String>(&id_s, stmt, 0);
       id = stol(id_s);
-      prec_id = id;
-      double min_mz;
-      Sql::extractValue<double>(&min_mz, stmt, 1);
-      double min_rt;
-      Sql::extractValue<double>(&min_rt, stmt, 2);
-      double max_mz;
-      Sql::extractValue<double>(&max_mz, stmt, 3);
-      double max_rt;
-      Sql::extractValue<double>(&max_rt, stmt, 4);
-      int bb_idx;
-      Sql::extractValue<int>(&bb_idx, stmt, 5);
 
-      // check id 
-      // if id equals precursor add to vector, else change key
-      //if ((id == prec_id) || (prec_id == 0)) {
+      long ref_id;
+      // extract as String
+      Sql::extractValue<String>(&id_s, stmt, 1);
+      ref_id = stol(id_s);
+
+      double min_mz;
+      Sql::extractValue<double>(&min_mz, stmt, 2);
+      double min_rt;
+      Sql::extractValue<double>(&min_rt, stmt, 3);
+      double max_mz;
+      Sql::extractValue<double>(&max_mz, stmt, 4);
+      double max_rt;
+      Sql::extractValue<double>(&max_rt, stmt, 5);
+      int bb_idx;
+      Sql::extractValue<int>(&bb_idx, stmt, 6);
+
+      /// save current row as map of map of vectors
+      /// traversing hierarchies of features, subordinates and convexhull points respectively
+
       std::tuple<double, double, double, double> current_bbox = std::make_tuple(min_mz, min_rt, max_mz, max_rt);
       std::pair<int, std::tuple<double, double, double, double>> idx_bbox = std::make_pair(bb_idx, current_bbox);
-      id_bboxes[id].push_back(idx_bbox);
+      sub_id_bboxes[ref_id][id].push_back(idx_bbox);
+
+      //feat_id_bboxes[id].push_back(idx_bbox);
+
+      sqlite3_step(stmt);
     }
+    sqlite3_finalize(stmt);
+
+
+  */
+
+ 
+    // multimap version
+    //std::unordered_multimap <long, std::vector <std::tuple <long, int, double, double, double, double>>> sub_id_bboxes;
+    std::unordered_multimap <long, std::pair<long, std::tuple <int, double, double, double, double>>> sub_id_bboxes;
+
+    // access table stmt
+    sql = "SELECT * FROM SUBORDINATES_TABLE_BOUNDINGBOX INNER JOIN FEATURES_TABLE ON SUBORDINATES_TABLE_BOUNDINGBOX.REF_ID = FEATURES_TABLE.ID";
+    SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+
+    while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
+    {
+      String id_s;
+      long id;
+      // extract as String
+      Sql::extractValue<String>(&id_s, stmt, 0);
+      id = stol(id_s);
+
+      String ref_id_s;
+      long ref_id;
+      // extract as String
+      Sql::extractValue<String>(&ref_id_s, stmt, 1);
+      ref_id = stol(ref_id_s);
+
+      double min_mz;
+      Sql::extractValue<double>(&min_mz, stmt, 2);
+      double min_rt;
+      Sql::extractValue<double>(&min_rt, stmt, 3);
+      double max_mz;
+      Sql::extractValue<double>(&max_mz, stmt, 4);
+      double max_rt;
+      Sql::extractValue<double>(&max_rt, stmt, 5);
+      int bb_idx;
+      Sql::extractValue<int>(&bb_idx, stmt, 6);
+
+      /// save current row as map of map of vectors
+      /// traversing hierarchies of features, subordinates and convexhull points respectively
+
+      std::tuple<long, int, double, double, double, double> sub_idx_bbox = std::make_tuple(id, bb_idx, min_mz, min_rt, max_mz, max_rt);
+      sub_id_bboxes.insert(std::make_pair(ref_id, sub_idx_bbox));
+
+
+      sqlite3_step(stmt);
+    }
+    sqlite3_finalize(stmt);
+
+
+
 
     /// save convexhull points to feature_map
-    /// loop across features in featuremap
+    /// traverse subordinates of features
+    /// extract convexhull points of container sub_id_bboxes
+    for (Feature& feature : feature_map)
+    {
+      /// get feature id 
+      long ref_id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));      
+
+      // access multipam key by ref_id of feature, then return size of all  number of all tuples with same 
+      // id subordinates fore each subordiante equal to the current subordinate
+      // access tuple and access tuple at bb_idx iterating 
+      int sub_idx_cnt = 0;
+
+      for (Feature& sub : feature.getSubordinates())
+      {
+        /// get subordinate id 
+        long id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));
+        std::cout << "id : " << ref_id  << std::endl;
+
+
+        std::tuple <long, int, double, double, double, double> intermediate;
+        intermediate =  sub_id_bboxes.find(ref_id)->second;
+
+        // find ref_id key in sub_id_bboxes
+        // return amount of subordinate key entries of subordinates
+        std::cout << sub_id_bboxes.count(id) << std::endl;
+
+
+        std::cout << it << std::endl;
+
+
+
+        // return intermediate tuple
+        // check if tuple index is equal to current counter sub_idx_cnt
+        // write convexhull in subordinate else continue with increased counter
+
+
+
+        /*std::cout << std::get<2>(intermediate) << std::endl;*/
+
+      }
+
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /*
+    /// save convexhull points to feature_map
+    /// traverse subordinates of features
+    /// extract convexhull points of container sub_id_bboxes
     for (Feature& feature : feature_map)
     {
       /// get feature id 
       long id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));
       
+      for (Feature& sub : feature.getSubordinates())
+      {
+        /// get subordinate id 
+        long id = static_cast<int64_t>(feature.getUniqueId() & ~(1ULL << 63));
+
+
+
+
+
+
+
+
+      }
+
+
       /// find feature id in boundingbox map as key
-      auto idx_box = id_bboxes.find(id);
+      auto idx_box = sub_id_bboxes.find(id);
 
       auto pairs = idx_box->second;
 
@@ -1578,11 +1716,9 @@ namespace OpenMS
         feature.getConvexHulls().push_back(hull);
       }
     }
-
-
-
-    */
-
+  
+  */
+ 
 
   
 
@@ -1750,6 +1886,50 @@ namespace OpenMS
   // end of FeatureSQLFile::read
 
 } // namespace OpenMS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
