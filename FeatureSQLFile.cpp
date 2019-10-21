@@ -134,7 +134,7 @@ namespace OpenMS
 
   // get datatype
   //if ((dt == DataValue::STRING_VALUE) || (dt == DataValue::STRING_LIST))
-  DataValue::DataType getColumnDatatype(const String label)
+  DataValue::DataType getColumnDatatype(const  String& label)
   { 
     DataValue::DataType type;
     if (label.hasPrefix("_S_"))
@@ -170,7 +170,7 @@ namespace OpenMS
 
 
   // get userparameter
-  String getColumnName(const String &label)
+  String getColumnName(const String& label)
   { 
     String label_userparam;
     if (label.hasPrefix("_S_"))
@@ -215,7 +215,7 @@ namespace OpenMS
       Sql::extractValue<String>(&value, stmt, i);
       current_feature.setMetaValue(column_name, value); 
     } 
-    else if (column_type == DataValue::INT_VALUE)
+      else if (column_type == DataValue::INT_VALUE)
     {
       column_name = column_name.substr(3);
       int value = 0;
@@ -264,6 +264,25 @@ namespace OpenMS
       Sql::extractValue<String>(&value, stmt, i);
     }
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -342,8 +361,8 @@ namespace OpenMS
     std::vector<String> subordinate_elements = {"ID", "SUB_IDX" , "REF_ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     std::vector<String> subordinate_elements_types = {"INTEGER", "INTEGER", "INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
 
-    std::vector<String> dataprocessing_elements = {"ID", "SOFTWARE", "DATA", "TIME", "ACTIONS"};
-    std::vector<String> dataprocessing_elements_types = {"INTEGER" ,"TEXT" ,"TEXT" ,"TEXT" , "TEXT"};
+    std::vector<String> dataprocessing_elements = {"ID", "SOFTWARE", "SOFTWARE_VERSION", "DATA", "TIME", "ACTIONS"};
+    std::vector<String> dataprocessing_elements_types = {"INTEGER" ,"TEXT" ,"TEXT" ,"TEXT" ,"TEXT" , "TEXT"};
 
     std::vector<String> feat_bounding_box_elements = {"REF_ID", "MIN_MZ", "MIN_RT", "MAX_MZ", "MAX_RT", "BB_IDX"};
     std::vector<String> feat_bounding_box_elements_types = {"INTEGER" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
@@ -389,11 +408,6 @@ namespace OpenMS
 
 
 
-
-
-
-
-    // read feature_map userparameter values of dataprocessing and store as key value map
     std::vector<String> dataproc_keys;
     const std::vector<DataProcessing> dataprocessing_userparams = feature_map.getDataProcessing();
     std::map<String, DataValue::DataType> dataproc_map_key2type;
@@ -490,7 +504,7 @@ namespace OpenMS
     }
     // test for illegal entries
     // catch :
-    const std::vector<String> bad_sym = {"+", "-", "?", "!", "*", "@", "%", "^", "&", "#", "=", "/", "\\", ":", "\"", "\'"};
+    const std::vector<String> bad_sym = {"+", "_", "-", "?", "!", "*", "@", "%", "^", "&", "#", "=", "/", "\\", ":", "\"", "\'"};
 
     for (std::size_t idx = 0; idx != dataprocessing_elements.size(); ++idx)
     {
@@ -898,12 +912,13 @@ namespace OpenMS
 
     std::cout << "\n" << static_cast<int64_t>(feature_map.getUniqueId() & ~(1ULL << 63)) << std::endl;
     dataproc_elems.push_back(static_cast<int64_t>(feature_map.getUniqueId() & ~(1ULL << 63)));
+    
     const std::vector<DataProcessing> dataprocessing = feature_map.getDataProcessing();
   
     for (auto datap : dataprocessing)
     {
       dataproc_elems.push_back(datap.getSoftware().getName());
-      //dataproc_elems.push_back(datap.getSoftware().getVersion());
+      dataproc_elems.push_back(datap.getSoftware().getVersion());
       dataproc_elems.push_back(datap.getCompletionTime().getDate());
       dataproc_elems.push_back(datap.getCompletionTime().getTime());
 
@@ -917,8 +932,7 @@ namespace OpenMS
       if (processing_action_names.size() >= 1)
       {
         dataproc_elems.push_back(ListUtils::concatenate(processing_action_names, ",")); 
-      }
-      else
+      } else
       {
         dataproc_elems.push_back(processing_action_names[0]);
       }
@@ -934,6 +948,7 @@ namespace OpenMS
         dataproc_elems.push_back(datap.getMetaValue(key));
       }
     }
+
     // non-userparam entries
     // resolve SQL type from dataprocessing_elements_types
     for (std::size_t idx = 0; idx != dataprocessing_elements.size(); ++idx)
@@ -1548,12 +1563,14 @@ namespace OpenMS
     
       String software;
       Sql::extractValue<String>(&software, stmt, 1);
+      String software_name;
+      Sql::extractValue<String>(&software_name, stmt, 2);
       String data;
-      Sql::extractValue<String>(&data, stmt, 2);
+      Sql::extractValue<String>(&data, stmt, 3);
       String time;
-      Sql::extractValue<String>(&time, stmt, 3);
+      Sql::extractValue<String>(&time, stmt, 4);
       String action;
-      Sql::extractValue<String>(&action, stmt, 4);
+      Sql::extractValue<String>(&action, stmt, 5);
 
       // get values
       // id, RT, MZ, Intensity, Charge, Quality
@@ -1563,6 +1580,7 @@ namespace OpenMS
 
       //software
       dp.getSoftware().setName(software);
+      dp.getSoftware().setVersion(software_name);
 
       //time
       DateTime date_time;
