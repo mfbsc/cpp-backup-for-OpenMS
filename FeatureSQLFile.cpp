@@ -1029,21 +1029,12 @@ namespace OpenMS
     SqliteConnector conn(filename);
     db = conn.getDB();
 
-  /*
+    // set switches to access only existent tables
     bool features_switch = SqliteConnector::tableExists(db, "FEATURES_TABLE");
     bool subordinates_switch = SqliteConnector::tableExists(db, "FEATURES_SUBORDINATES");
     bool dataprocessing_switch = SqliteConnector::tableExists(db, "FEATURES_DATAPROCESSING");
     bool features_bbox_switch = SqliteConnector::tableExists(db, "FEATURES_TABLE_BOUNDINGBOX");
     bool subordinates_bbox_switch = SqliteConnector::tableExists(db, "SUBORDINATES_TABLE_BOUNDINGBOX");
-  */
-
-    // features
-    bool features_exists = SqliteConnector::tableExists(db, "FEATURES_TABLE");
-    if (features_exists)
-    { 
-      std::cout << "FEATURES_TABLE ok" << std::endl;
-    }
-
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                     store sqlite3 database as FeatureMap                                             //
@@ -1063,9 +1054,8 @@ namespace OpenMS
     SqliteConnector::prepareStatement(db, &stmt, sql);
     //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-    int cols;
-    cols = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = " << cols << std::endl;
+    int cols_features = sqlite3_column_count(stmt);
+    std::cout << "\n" << "Number of columns = " << cols_features << std::endl;
     sqlite3_finalize(stmt);
 
     // 2. subordinates
@@ -1073,8 +1063,8 @@ namespace OpenMS
     SqliteConnector::prepareStatement(db, &stmt, sql);
     //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-    cols = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = " << cols << std::endl;
+    int cols_subordinates = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = " << cols_subordinates << std::endl;
     sqlite3_finalize(stmt);
 
     // 3. features bbox
@@ -1082,27 +1072,26 @@ namespace OpenMS
     SqliteConnector::prepareStatement(db, &stmt, sql);
     //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-    cols = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = " << cols << std::endl;
+    int cols_features_bbox = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = " << cols_features_bbox << std::endl;
     sqlite3_finalize(stmt);
-
 
     // 4. subordinate bbox
     sql = "SELECT * FROM SUBORDINATES_TABLE_BOUNDINGBOX;";
     SqliteConnector::prepareStatement(db, &stmt, sql);
     //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-    cols = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = " << cols << std::endl;
+    int cols_subordinates_bbox = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = " << cols_subordinates_bbox << std::endl;
     sqlite3_finalize(stmt);
 
-
+    int cols;
     // 5. concatenation features bbox
     sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id;";
     SqliteConnector::prepareStatement(db, &stmt, sql);
     //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-    cols = sqlite3_column_count(stmt);
+    int cols_features_join_bbox = sqlite3_column_count(stmt);
     std::cout << "Number of columns = (features+bbox) " << cols << std::endl;
     sqlite3_finalize(stmt);
 
@@ -1112,9 +1101,164 @@ namespace OpenMS
     SqliteConnector::prepareStatement(db, &stmt, sql);
     //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
-    cols = sqlite3_column_count(stmt);
+    int cols_features_join_subordinates_join_bbox = sqlite3_column_count(stmt);
     std::cout << "Number of columns = (Features + Subordinates + bbox) " << cols << std::endl;
     sqlite3_finalize(stmt);
+
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                                                     store sqlite3 database as FeatureMap                                             //
+    // traverse queries                                                                                                                     //
+    // set all parameters: features, subordinates, boundingboxes                                                                            //
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    if (features_switch)
+    {
+      /// 1. get feature data from database
+      String sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id;";
+      SqliteConnector::prepareStatement(db, &stmt, sql);
+      //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+      sqlite3_step(stmt);
+
+      while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
+      {
+        Feature current_feature;
+        
+        // index to account for offsets in joined tables
+        int idx;
+
+        // set feature parameters
+        String id_s;
+        long id = 0;
+        // extract as String TODO
+        Sql::extractValue<String>(&id_s, stmt, 0);
+        id = stol(id_s);
+        double rt = 0.0;
+        Sql::extractValue<double>(&rt, stmt, 1);
+        double mz = 0.0;
+        Sql::extractValue<double>(&mz, stmt, 2);
+        double intensity = 0.0;
+        Sql::extractValue<double>(&intensity, stmt, 3);
+        int charge = 0;
+        Sql::extractValue<int>(&charge, stmt, 4);
+        double quality = 0.0;
+        Sql::extractValue<double>(&quality, stmt, 5);
+
+        // get values id, RT, MZ, Intensity, Charge, Quality
+        // save SQL column elements as feature
+        current_feature.setUniqueId(id);
+        current_feature.setRT(rt);
+        current_feature.setMZ(mz);
+        current_feature.setIntensity(intensity);
+        current_feature.setCharge(charge);
+        current_feature.setOverallQuality(quality);
+
+        idx = 6;
+        // save userparam columns
+        for (int i = idx; i < cols_features ; ++i)
+        {
+          String column_name = sqlite3_column_name(stmt, i);
+          int column_type = getColumnDatatype(column_name);
+
+          std::cout << "\n" << column_name << std::endl;
+
+          if (column_type == DataValue::STRING_VALUE)
+          {
+            column_name = column_name.substr(3);
+            String value;
+            Sql::extractValue<String>(&value, stmt, i);
+            current_feature.setMetaValue(column_name, value); 
+            continue;
+          } else if (column_type == DataValue::INT_VALUE)
+          {
+            column_name = column_name.substr(3);
+            int value = 0;
+            Sql::extractValue<int>(&value, stmt, i);
+            current_feature.setMetaValue(column_name, value); 
+            continue;
+          } else if (column_type == DataValue::DOUBLE_VALUE)
+          {
+            column_name = column_name.substr(3);
+            double value = 0.0;
+            Sql::extractValue<double>(&value, stmt, i);          
+            current_feature.setMetaValue(column_name, value); 
+            continue;
+          } else if (column_type == DataValue::STRING_LIST)
+          {
+            column_name = column_name.substr(4);
+            String value; 
+            Sql::extractValue<String>(&value, stmt, i);
+
+            StringList sl;
+            // cut off "[" and "]""
+            value = value.chop(1);
+            value = value.substr(1);
+            value.split(", ", sl);
+            current_feature.setMetaValue(column_name, sl);
+            continue;
+          } else if (column_type == DataValue::INT_LIST)
+          {
+            column_name = column_name.substr(4);
+            String value; //IntList value;
+            Sql::extractValue<String>(&value, stmt, i); //IntList
+            value = value.chop(1);
+            value = value.substr(1);
+            std::vector<String> value_list;
+            IntList il = ListUtils::create<int>(value, ',');
+            current_feature.setMetaValue(column_name, il);
+            continue;
+          } else if (column_type == DataValue::DOUBLE_LIST)
+          {
+            column_name = column_name.substr(4);
+            String value; //DoubleList value;
+            Sql::extractValue<String>(&value, stmt, i); //DoubleList
+            value = value.chop(1);
+            value = value.substr(1);          
+            DoubleList dl = ListUtils::create<double>(value, ',');
+            current_feature.setMetaValue(column_name, dl);
+            continue;
+          } else if (column_type == DataValue::EMPTY_VALUE)
+          {
+            String value;
+            Sql::extractValue<String>(&value, stmt, i);
+            continue;
+          }
+        }
+
+        // add offset of one for id column to index
+        idx = cols_features + 1;
+
+        String column_name = sqlite3_column_name(stmt, idx);
+
+        std::cout << "\n" << "column_name is : " << column_name << std::endl; 
+        
+
+        double min_mz = 0.0;
+        Sql::extractValue<double>(&min_mz, stmt, (idx + 0));
+        double min_rt = 0.0;
+        Sql::extractValue<double>(&min_rt, stmt, (idx + 1));
+        double max_mz = 0.0;
+        Sql::extractValue<double>(&max_mz, stmt, (idx + 2));
+        double max_rt = 0.0;
+        Sql::extractValue<double>(&max_rt, stmt, (idx + 3));
+
+        std::cout << "\n" << "min_mz is : " << min_mz << std::endl; 
+        
+        ConvexHull2D hull;
+        hull.addPoint({min_mz, min_rt});
+        hull.addPoint({max_mz, max_rt});
+        current_feature.getConvexHulls().push_back(hull);
+
+        /// save feature in FeatureMap object
+        feature_map.push_back(current_feature);
+        //feature_map.ensureUniqueId();
+        sqlite3_step(stmt);
+      }
+      sqlite3_finalize(stmt);
+    }
+
+
+
 
     // 
   }
