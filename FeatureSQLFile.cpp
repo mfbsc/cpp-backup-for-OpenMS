@@ -281,7 +281,7 @@ namespace OpenMS
       features_switch = true;
       if (feature.getConvexHulls().size() > 0)
       {
-        subordinates_bbox_switch = true;
+        features_bbox_switch = true;
       }
       for (Feature sub : feature.getSubordinates())
       {
@@ -898,6 +898,118 @@ namespace OpenMS
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // alternate version with table join 
+  /*
+    // access of features and boundingboxes
+    SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id
+    // access of features, subordinates and boundingboxes
+    SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id
+
+  // working modell
+  read number of columns for all tables except dataprocessing
+  combine access to joined tables via compound index
+  one big loop with two different statements
+  1. for features access
+  2. for subordinate access
+  */
+
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                   read FeatureMap as SQL database                                                    //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -917,11 +1029,13 @@ namespace OpenMS
     SqliteConnector conn(filename);
     db = conn.getDB();
 
+  /*
     bool features_switch = SqliteConnector::tableExists(db, "FEATURES_TABLE");
     bool subordinates_switch = SqliteConnector::tableExists(db, "FEATURES_SUBORDINATES");
     bool dataprocessing_switch = SqliteConnector::tableExists(db, "FEATURES_DATAPROCESSING");
     bool features_bbox_switch = SqliteConnector::tableExists(db, "FEATURES_TABLE_BOUNDINGBOX");
     bool subordinates_bbox_switch = SqliteConnector::tableExists(db, "SUBORDINATES_TABLE_BOUNDINGBOX");
+  */
 
     // features
     bool features_exists = SqliteConnector::tableExists(db, "FEATURES_TABLE");
@@ -931,8 +1045,6 @@ namespace OpenMS
     }
 
 
-
-
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                     store sqlite3 database as FeatureMap                                             //
     //                                                     1. features                                                                      //                                    
@@ -940,7 +1052,193 @@ namespace OpenMS
     //                                                     3. boundingbox                                                                   //
     //                                                     4. dataprocessing                                                                //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    
+    // check indexing
 
+    String sql;
+
+    // get number of columns for each table except dataprocessing
+    // 1. features
+    sql = "SELECT * FROM FEATURES_TABLE;";
+    SqliteConnector::prepareStatement(db, &stmt, sql);
+    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+    int cols;
+    cols = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = " << cols << std::endl;
+    sqlite3_finalize(stmt);
+
+    // 2. subordinates
+    sql = "SELECT * FROM FEATURES_SUBORDINATES;";
+    SqliteConnector::prepareStatement(db, &stmt, sql);
+    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+    cols = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = " << cols << std::endl;
+    sqlite3_finalize(stmt);
+
+    // 3. features bbox
+    sql = "SELECT * FROM FEATURES_TABLE_BOUNDINGBOX;";
+    SqliteConnector::prepareStatement(db, &stmt, sql);
+    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+    cols = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = " << cols << std::endl;
+    sqlite3_finalize(stmt);
+
+
+    // 4. subordinate bbox
+    sql = "SELECT * FROM SUBORDINATES_TABLE_BOUNDINGBOX;";
+    SqliteConnector::prepareStatement(db, &stmt, sql);
+    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+    cols = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = " << cols << std::endl;
+    sqlite3_finalize(stmt);
+
+
+    // 5. concatenation features bbox
+    sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id;";
+    SqliteConnector::prepareStatement(db, &stmt, sql);
+    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+    cols = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = (features+bbox) " << cols << std::endl;
+    sqlite3_finalize(stmt);
+
+
+    // 6. concatenation features subordinates bbox 
+    sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id;";
+    SqliteConnector::prepareStatement(db, &stmt, sql);
+    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+    cols = sqlite3_column_count(stmt);
+    std::cout << "Number of columns = (Features + Subordinates + bbox) " << cols << std::endl;
+    sqlite3_finalize(stmt);
+
+    // 
+  }
+} // namespace OpenMS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  //                                      old version of working code "multi-loop"                                   //
+  /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    
+  /*
     if (features_switch)
     {
       /// 1. get feature data from database
@@ -1569,8 +1867,11 @@ namespace OpenMS
 
     // return FeatureMap 
     return feature_map;
+
+
   }  
   // end of FeatureSQLFile::read
 
 } // namespace OpenMS
 
+*/
