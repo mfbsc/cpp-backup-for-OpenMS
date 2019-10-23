@@ -1115,6 +1115,7 @@ namespace OpenMS
 
     // TODO: case of empty fields
 
+  /*
     // features
     if (features_switch)
     {
@@ -1132,10 +1133,197 @@ namespace OpenMS
         int bbox_idx = 0;
         Sql::extractValue<int>(&bbox_idx, stmt, bbox_col);
 
-        if(bbox_idx == 0)
+        if (bbox_idx == 0)
         {
-          //std::cout << "\n bbox_idx = " << bbox_idx << std::endl;
+          if (feature != Feature()) feature_map.push_back(feature);
+          feature = Feature();
 
+          //std::cout << "\n bbox_idx = " << bbox_idx << std::endl;
+          
+          // set feature parameters
+          String id_s;
+          long id = 0;
+          // extract as String TODO
+          Sql::extractValue<String>(&id_s, stmt, 0);
+          id = stol(id_s);
+          double rt = 0.0;
+          Sql::extractValue<double>(&rt, stmt, 1);
+          double mz = 0.0;
+          Sql::extractValue<double>(&mz, stmt, 2);
+          double intensity = 0.0;
+          Sql::extractValue<double>(&intensity, stmt, 3);
+          int charge = 0;
+          Sql::extractValue<int>(&charge, stmt, 4);
+          double quality = 0.0;
+          Sql::extractValue<double>(&quality, stmt, 5);
+
+          // get values id, RT, MZ, Intensity, Charge, Quality
+          // save SQL column elements as feature
+          feature.setUniqueId(id);
+          feature.setRT(rt);
+          feature.setMZ(mz);
+          feature.setIntensity(intensity);
+          feature.setCharge(charge);
+          feature.setOverallQuality(quality);
+
+          // index to account for offsets in joined tables
+          int col_nr = 6;
+          // save userparam columns
+          for (int i = col_nr; i < cols_features ; ++i)
+          {
+            String column_name = sqlite3_column_name(stmt, i);
+            int column_type = getColumnDatatype(column_name);
+
+            //std::cout << "\n" << column_name << std::endl;
+
+            if (column_type == DataValue::STRING_VALUE)
+            {
+              column_name = column_name.substr(3);
+              String value;
+              Sql::extractValue<String>(&value, stmt, i);
+              feature.setMetaValue(column_name, value); 
+              continue;
+            } else if (column_type == DataValue::INT_VALUE)
+            {
+              column_name = column_name.substr(3);
+              int value = 0;
+              Sql::extractValue<int>(&value, stmt, i);
+              feature.setMetaValue(column_name, value); 
+              continue;
+            } else if (column_type == DataValue::DOUBLE_VALUE)
+            {
+              column_name = column_name.substr(3);
+              double value = 0.0;
+              Sql::extractValue<double>(&value, stmt, i);          
+              feature.setMetaValue(column_name, value); 
+              continue;
+            } else if (column_type == DataValue::STRING_LIST)
+            {
+              column_name = column_name.substr(4);
+              String value; 
+              Sql::extractValue<String>(&value, stmt, i);
+
+              StringList sl;
+              // cut off "[" and "]""
+              value = value.chop(1);
+              value = value.substr(1);
+              value.split(", ", sl);
+              feature.setMetaValue(column_name, sl);
+              continue;
+            } else if (column_type == DataValue::INT_LIST)
+            {
+              column_name = column_name.substr(4);
+              String value; //IntList value;
+              Sql::extractValue<String>(&value, stmt, i); //IntList
+              value = value.chop(1);
+              value = value.substr(1);
+              std::vector<String> value_list;
+              IntList il = ListUtils::create<int>(value, ',');
+              feature.setMetaValue(column_name, il);
+              continue;
+            } else if (column_type == DataValue::DOUBLE_LIST)
+            {
+              column_name = column_name.substr(4);
+              String value; //DoubleList value;
+              Sql::extractValue<String>(&value, stmt, i); //DoubleList
+              value = value.chop(1);
+              value = value.substr(1);          
+              DoubleList dl = ListUtils::create<double>(value, ',');
+              feature.setMetaValue(column_name, dl);
+              continue;
+            } else if (column_type == DataValue::EMPTY_VALUE)
+            {
+              String value;
+              Sql::extractValue<String>(&value, stmt, i);
+              continue;
+            }
+          }
+        
+          // add offset of one for id column to index
+          col_nr = cols_features + 1; //56 + 1
+
+          double min_mz = 0.0;
+          Sql::extractValue<double>(&min_mz, stmt, (col_nr + 0));
+          double min_rt = 0.0;
+          Sql::extractValue<double>(&min_rt, stmt, (col_nr + 1));
+          double max_mz = 0.0;
+          Sql::extractValue<double>(&max_mz, stmt, (col_nr + 2));
+          double max_rt = 0.0;
+          Sql::extractValue<double>(&max_rt, stmt, (col_nr + 3));
+
+          ConvexHull2D hull;
+          hull.addPoint({min_mz, min_rt});
+          hull.addPoint({max_mz, max_rt});
+          feature.getConvexHulls().push_back(hull);
+
+        } 
+        else if (bbox_idx > 0) // add new bb to existing feature
+        {
+          std::cout << "\n bbox_idx = " << bbox_idx << std::endl;
+
+          int col_nr = cols_features + 1; //56 + 1
+
+          double min_mz = 0.0;
+          Sql::extractValue<double>(&min_mz, stmt, (col_nr + 0));
+          double min_rt = 0.0;
+          Sql::extractValue<double>(&min_rt, stmt, (col_nr + 1));
+          double max_mz = 0.0;
+          Sql::extractValue<double>(&max_mz, stmt, (col_nr + 2));
+          double max_rt = 0.0;
+          Sql::extractValue<double>(&max_rt, stmt, (col_nr + 3));
+
+          ConvexHull2D hull;
+          hull.addPoint({min_mz, min_rt});
+          hull.addPoint({max_mz, max_rt});
+          feature.getConvexHulls().push_back(hull);
+        }
+
+        sqlite3_step(stmt);
+        if (sqlite3_column_type( stmt, 0 ) == SQLITE_NULL) feature_map.push_back(feature); 
+
+        /// save feature in FeatureMap object
+        //feature_map.ensureUniqueId();
+        //sqlite3_step(stmt);
+      }
+      sqlite3_finalize(stmt);
+
+      // return FeatureMap 
+      return feature_map;
+
+    }
+    */
+
+
+
+    // features
+    if (features_switch)
+    {
+      /// 1. get feature data from database
+      String sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id;";
+      SqliteConnector::prepareStatement(db, &stmt, sql);
+      //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+      sqlite3_step(stmt);
+
+      FeatureMap feature_map;
+      bool feature_switch = false;
+
+      Feature feature_old;
+
+      while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
+      {
+        int bbox_col = cols_features + 1 + 4; //56 in features + 1 offset id + 4 position of bbox_idx column
+        int bbox_idx = 0;
+        Sql::extractValue<int>(&bbox_idx, stmt, bbox_col);
+
+        if (bbox_idx == 0)
+        {
+          if (feature_switch == true)
+          {
+            feature_map.push_back(feature_old);
+          }
+          feature_switch = true;
+
+          //std::cout << "\n bbox_idx = " << bbox_idx << std::endl;
           Feature current_feature;
           
           // set feature parameters
@@ -1249,16 +1437,21 @@ namespace OpenMS
           double max_rt = 0.0;
           Sql::extractValue<double>(&max_rt, stmt, (col_nr + 3));
 
+          std::cout << "############################################" << std::endl;
+          std::cout << max_rt << std::endl;
+          std::cout << "############################################" << std::endl;
+
           ConvexHull2D hull;
           hull.addPoint({min_mz, min_rt});
           hull.addPoint({max_mz, max_rt});
           current_feature.getConvexHulls().push_back(hull);
 
-          feature = current_feature;
+          feature_old = current_feature;
 
           sqlite3_step(stmt);
 
-        } else if (bbox_idx != 0)
+        }
+        else if (bbox_idx > 0)
         {
           std::cout << "\n bbox_idx = " << bbox_idx << std::endl;
 
@@ -1276,21 +1469,24 @@ namespace OpenMS
           ConvexHull2D hull;
           hull.addPoint({min_mz, min_rt});
           hull.addPoint({max_mz, max_rt});
-          feature.getConvexHulls().push_back(hull);
+          feature_old.getConvexHulls().push_back(hull);
 
           sqlite3_step(stmt);
 
         }
-
-
-
         /// save feature in FeatureMap object
-        feature_map.push_back(feature);
         //feature_map.ensureUniqueId();
         //sqlite3_step(stmt);
       }
+      feature_map.push_back(feature_old);
+
       sqlite3_finalize(stmt);
+
+      // return FeatureMap 
+      return feature_map;
+
     }
+  
 
 
 
@@ -1313,51 +1509,22 @@ namespace OpenMS
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  /*
     // subordinates
     if (subordinates_switch)
     {
-      sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id;";
+      sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id ORDER BY FEATURES_TABLE.ID;";
       SqliteConnector::prepareStatement(db, &stmt, sql);
       sqlite3_step(stmt);
 
       int counter = 0;
       int column_nr = 0;
+
       std::vector<Feature> subordinates;
       long s_id_old = 0;
+      int feat_id_cnt = 1;
+      Feature feature_old;
+      Feature subordinate_old;
 
       while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
       {
@@ -1368,8 +1535,11 @@ namespace OpenMS
             String column_name = sqlite3_column_name(stmt, i);
             std::cout << i << "th column with name: " << column_name << std::endl; 
           }
-          ++counter;
         }
+        ++counter;
+        //std::cout << "number of lines " << counter << std::endl; 
+
+
         Feature feature;
         Feature subordinate;
 
@@ -1379,13 +1549,27 @@ namespace OpenMS
         Sql::extractValue<String>(&feat_id, stmt, 0);
         f_id = stol(feat_id);
         
+        if (feat_id_cnt != 0)
+        {
+          feature_old = f_id;
+          --feat_id_cnt;
+          feature.setUniqueId(f_id);
+        } 
+
+        if ((feature_old != f_id) && (feat_id_cnt == 0))
+        {
+
+        }
+
+
+
+
         // set subordinate ID
         String sub_id;
         long s_id = 0;
         Sql::extractValue<String>(&sub_id, stmt, cols_features); // 
         s_id = stol(sub_id);
         
-        feature.setUniqueId(f_id);
 
         // get boundingbox index
         int bbox_col = cols_features_join_subordinates_join_bbox - 1; // - 1 to address last column
@@ -1398,16 +1582,13 @@ namespace OpenMS
 
 
 
-
-
         // check if sub_idx is 0 => new subordinate
         // if sub_idx is not 0 => old subordinate, add bbox to current subordinate
         if (sub_idx == 0)
         {
-          Feature current_subordinate;
-        
-          // check stmt for change in subordinate ID
-          // set subordinate parameters
+          std::cout << "s_id_old \t f_id \t s_id" << std::endl;
+          std::cout << s_id_old << "\t" << f_id << "\t" << s_id << std::endl;
+
           column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
           double rt = 0.0;
           Sql::extractValue<double>(&rt, stmt, column_nr + 1);
@@ -1419,15 +1600,12 @@ namespace OpenMS
           Sql::extractValue<int>(&charge, stmt, column_nr + 4);
           double quality = 0.0;
           Sql::extractValue<double>(&quality, stmt, column_nr + 5);
-
-          // get values id, RT, MZ, Intensity, Charge, Quality
-          current_subordinate.setUniqueId(s_id);
-          current_subordinate.setRT(rt);
-          current_subordinate.setMZ(mz);
-          current_subordinate.setIntensity(intensity);
-          current_subordinate.setCharge(charge);
-          current_subordinate.setOverallQuality(quality);
-
+          subordinate.setUniqueId(s_id);
+          subordinate.setRT(rt);
+          subordinate.setMZ(mz);
+          subordinate.setIntensity(intensity);
+          subordinate.setCharge(charge);
+          subordinate.setOverallQuality(quality);
           // userparams
           column_nr = cols_features + 5;  // +5 = subordinate params
           for (int i = column_nr; i < cols_features + cols_subordinates - 1 ; ++i) // subordinate userparams - 1 = index of last element in cols_subordinates
@@ -1435,28 +1613,28 @@ namespace OpenMS
             String column_name = sqlite3_column_name(stmt, i);
             int column_type = getColumnDatatype(column_name);
 
-            std::cout << column_name << std::endl;
+            //std::cout << column_name << std::endl;
 
             if (column_type == DataValue::STRING_VALUE)
             {
               column_name = column_name.substr(3);
               String value;
               Sql::extractValue<String>(&value, stmt, i);
-              current_subordinate.setMetaValue(column_name, value); 
+              subordinate.setMetaValue(column_name, value); 
               continue;
             } else if (column_type == DataValue::INT_VALUE)
             {
               column_name = column_name.substr(3);
               int value = 0;
               Sql::extractValue<int>(&value, stmt, i);
-              current_subordinate.setMetaValue(column_name, value); 
+              subordinate.setMetaValue(column_name, value); 
               continue;
             } else if (column_type == DataValue::DOUBLE_VALUE)
             {
               column_name = column_name.substr(3);
               double value = 0.0;
               Sql::extractValue<double>(&value, stmt, i);          
-              current_subordinate.setMetaValue(column_name, value); 
+              subordinate.setMetaValue(column_name, value); 
               continue;
             } else if (column_type == DataValue::STRING_LIST)
             {
@@ -1469,7 +1647,7 @@ namespace OpenMS
               value = value.chop(1);
               value = value.substr(1);
               value.split(", ", sl);
-              current_subordinate.setMetaValue(column_name, sl);
+              subordinate.setMetaValue(column_name, sl);
               continue;
             } else if (column_type == DataValue::INT_LIST)
             {
@@ -1480,7 +1658,7 @@ namespace OpenMS
               value = value.substr(1);
               std::vector<String> value_list;
               IntList il = ListUtils::create<int>(value, ',');
-              current_subordinate.setMetaValue(column_name, il);
+              subordinate.setMetaValue(column_name, il);
               continue;
             } else if (column_type == DataValue::DOUBLE_LIST)
             {
@@ -1490,7 +1668,7 @@ namespace OpenMS
               value = value.chop(1);
               value = value.substr(1);          
               DoubleList dl = ListUtils::create<double>(value, ',');
-              current_subordinate.setMetaValue(column_name, dl);
+              subordinate.setMetaValue(column_name, dl);
               continue;
             } else if (column_type == DataValue::EMPTY_VALUE)
             {
@@ -1499,13 +1677,37 @@ namespace OpenMS
               continue;
             }
           }
-          
-          // check if new bbox of new convexhulls have to be added
-          if(bbox_idx == 0)
-          {
-            // current_subordinate add bbox
-            column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
+          // current_subordinate add bbox
+          column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
+          double min_mz = 0.0;
+          Sql::extractValue<double>(&min_mz, stmt, (column_nr + 1));
+          double min_rt = 0.0;
+          Sql::extractValue<double>(&min_rt, stmt, (column_nr + 2));
+          double max_mz = 0.0;
+          Sql::extractValue<double>(&max_mz, stmt, (column_nr + 3));
+          double max_rt = 0.0;
+          Sql::extractValue<double>(&max_rt, stmt, (column_nr + 4));
 
+          //std::cout << min_mz << "\t" << min_rt << "\t" << max_mz << "\t" << max_rt << std::endl;
+
+          ConvexHull2D hull;
+          hull.addPoint({min_mz, min_rt});
+          hull.addPoint({max_mz, max_rt});
+          subordinate.getConvexHulls().push_back(hull);
+          subordinates.push_back(subordinate);
+          
+        } else if (sub_idx != 0) 
+        // check if subordinate == subordinate_old => add bbox to feature
+        // else => add bbox to current_feature
+        {
+          // same subordinates
+          if (s_id == s_id_old)
+          {
+            // add convex hull to previous subordinate
+            std::cout << "s_id == s_id_old" << std::endl;
+            std::cout << s_id << "\t" << s_id_old << std::endl;
+
+            column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
             double min_mz = 0.0;
             Sql::extractValue<double>(&min_mz, stmt, (column_nr + 1));
             double min_rt = 0.0;
@@ -1515,20 +1717,114 @@ namespace OpenMS
             double max_rt = 0.0;
             Sql::extractValue<double>(&max_rt, stmt, (column_nr + 4));
 
-            std::cout << min_mz << "\t" << min_rt << "\t" << max_mz << "\t" << max_rt << std::endl;
+            //std::cout << min_mz << "\t" << min_rt << "\t" << max_mz << "\t" << max_rt << std::endl;
 
             ConvexHull2D hull;
             hull.addPoint({min_mz, min_rt});
             hull.addPoint({max_mz, max_rt});
-            current_subordinate.getConvexHulls().push_back(hull);
+            subordinate_old.getConvexHulls().push_back(hull);
+            subordinate = subordinate_old;
+            subordinates.push_back(subordinate);
 
-            subordinate = current_subordinate;
-
-          } else if (bbox_idx != 0) 
+          } else if (s_id != s_id_old)
+          // different subordinates
           {
+            feature_map.push_back(feature);
+            subordinates.clear();
+            // add convex hull to current subordinate
+            std::cout << "s_id != s_id_old" << std::endl;
+            std::cout << s_id << "\t" << s_id_old << std::endl;
+
+            column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
+            double rt = 0.0;
+            Sql::extractValue<double>(&rt, stmt, column_nr + 1);
+            double mz = 0.0;
+            Sql::extractValue<double>(&mz, stmt, column_nr + 2);
+            double intensity = 0.0;
+            Sql::extractValue<double>(&intensity, stmt, column_nr + 3);
+            int charge = 0;
+            Sql::extractValue<int>(&charge, stmt, column_nr + 4);
+            double quality = 0.0;
+            Sql::extractValue<double>(&quality, stmt, column_nr + 5);
+            subordinate.setUniqueId(s_id);
+            subordinate.setRT(rt);
+            subordinate.setMZ(mz);
+            subordinate.setIntensity(intensity);
+            subordinate.setCharge(charge);
+            subordinate.setOverallQuality(quality);
+            // userparams
+            column_nr = cols_features + 5;  // +5 = subordinate params
+            for (int i = column_nr; i < cols_features + cols_subordinates - 1 ; ++i) // subordinate userparams - 1 = index of last element in cols_subordinates
+            {
+              String column_name = sqlite3_column_name(stmt, i);
+              int column_type = getColumnDatatype(column_name);
+
+              //std::cout << column_name << std::endl;
+
+              if (column_type == DataValue::STRING_VALUE)
+              {
+                column_name = column_name.substr(3);
+                String value;
+                Sql::extractValue<String>(&value, stmt, i);
+                subordinate.setMetaValue(column_name, value); 
+                continue;
+              } else if (column_type == DataValue::INT_VALUE)
+              {
+                column_name = column_name.substr(3);
+                int value = 0;
+                Sql::extractValue<int>(&value, stmt, i);
+                subordinate.setMetaValue(column_name, value); 
+                continue;
+              } else if (column_type == DataValue::DOUBLE_VALUE)
+              {
+                column_name = column_name.substr(3);
+                double value = 0.0;
+                Sql::extractValue<double>(&value, stmt, i);          
+                subordinate.setMetaValue(column_name, value); 
+                continue;
+              } else if (column_type == DataValue::STRING_LIST)
+              {
+                column_name = column_name.substr(4);
+                String value; 
+                Sql::extractValue<String>(&value, stmt, i);
+
+                StringList sl;
+                // cut off "[" and "]""
+                value = value.chop(1);
+                value = value.substr(1);
+                value.split(", ", sl);
+                subordinate.setMetaValue(column_name, sl);
+                continue;
+              } else if (column_type == DataValue::INT_LIST)
+              {
+                column_name = column_name.substr(4);
+                String value; //IntList value;
+                Sql::extractValue<String>(&value, stmt, i); //IntList
+                value = value.chop(1);
+                value = value.substr(1);
+                std::vector<String> value_list;
+                IntList il = ListUtils::create<int>(value, ',');
+                subordinate.setMetaValue(column_name, il);
+                continue;
+              } else if (column_type == DataValue::DOUBLE_LIST)
+              {
+                column_name = column_name.substr(4);
+                String value; //DoubleList value;
+                Sql::extractValue<String>(&value, stmt, i); //DoubleList
+                value = value.chop(1);
+                value = value.substr(1);          
+                DoubleList dl = ListUtils::create<double>(value, ',');
+                subordinate.setMetaValue(column_name, dl);
+                continue;
+              } else if (column_type == DataValue::EMPTY_VALUE)
+              {
+                String value;
+                Sql::extractValue<String>(&value, stmt, i);
+                continue;
+              }
+            }
             // current_subordinate add bbox
             column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
-
             double min_mz = 0.0;
             Sql::extractValue<double>(&min_mz, stmt, (column_nr + 1));
             double min_rt = 0.0;
@@ -1544,120 +1840,25 @@ namespace OpenMS
             hull.addPoint({min_mz, min_rt});
             hull.addPoint({max_mz, max_rt});
             subordinate.getConvexHulls().push_back(hull);
+            subordinates.push_back(subordinate);
 
-          }
-
-          
-        } else if (sub_idx != 0) 
-        // check if subordinate == subordinate_old => add bbox to feature
-        // else => add bbox to current_feature
-        {
-          if (s_id) 
-          // add convex hull don't change subordinate
-
-
-          if(bbox_idx == 0)
-          {
-            // new_subordinate + new boundingbox
-          } else if (bbox_idx != 0) 
-          {
-            // current_subordinate +  new boundingbox
           }
         }
 
         // set s_id_old
         Sql::extractValue<String>(&sub_id, stmt, cols_features); // 
         s_id_old = stol(sub_id);
+        subordinate_old = subordinate;
 
         sqlite3_step(stmt);
       
-        /*  
-          // check if bbox_idx is 0 and bbox in current subordinate
-          // if true add to convexhulls
-          // else check subordinate ID 
-          if(bbox_idx == 0)
-          {
-            std::cout << "I'm seeing the " << counter << " subordinate here" << std::endl;
-            std::cout << "I'm seeing the 0th bbox here" << std::endl;
-            
-
-
-          /*
-            
-
-            std::cout << f_id << "\t" << s_id << "\t" << rt << "\t" << mz << "\t" << intensity << "\t" << charge << "\t" << quality << std::endl;  
-          */
-
-          /*
-
-
-            column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
-
-            double min_mz = 0.0;
-            Sql::extractValue<double>(&min_mz, stmt, (column_nr + 1));
-            double min_rt = 0.0;
-            Sql::extractValue<double>(&min_rt, stmt, (column_nr + 2));
-            double max_mz = 0.0;
-            Sql::extractValue<double>(&max_mz, stmt, (column_nr + 3));
-            double max_rt = 0.0;
-            Sql::extractValue<double>(&max_rt, stmt, (column_nr + 4));
-
-            std::cout << min_mz << "\t" << min_rt << "\t" << max_mz << "\t" << max_rt << std::endl;
-
-            ConvexHull2D hull;
-            hull.addPoint({min_mz, min_rt});
-            hull.addPoint({max_mz, max_rt});
-            current_subordinate.getConvexHulls().push_back(hull);
-
-            subordinate = current_subordinate;
-          */
-          
-          //  sqlite3_step(stmt);
-          //} else if (bbox_idx != 0)
-          //{
-          //  std::cout << "\n I'm seeing the " << bbox_idx << "th bbox here" << std::endl;
-        
-          /*
-            column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
-
-            double min_mz = 0.0;
-            Sql::extractValue<double>(&min_mz, stmt, (column_nr + 1));
-            double min_rt = 0.0;
-            Sql::extractValue<double>(&min_rt, stmt, (column_nr + 2));
-            double max_mz = 0.0;
-            Sql::extractValue<double>(&max_mz, stmt, (column_nr + 3));
-            double max_rt = 0.0;
-            Sql::extractValue<double>(&max_rt, stmt, (column_nr + 4));
-
-            ConvexHull2D hull;
-            hull.addPoint({min_mz, min_rt});
-            hull.addPoint({max_mz, max_rt});
-            subordinate.getConvexHulls().push_back(hull);
-
-            sqlite3_step(stmt);
-          */
-          }
-
-        /*  
-          std::vector<Feature> subordinates;
-          subordinates.push_back(subordinate);
-
-          /// set subordinates
-          feature.setSubordinates(subordinates);
-
-
-          /// save feature in FeatureMap object
-          //feature_map.push_back(feature);
-          //feature_map.ensureUniqueId();
-
-        */
-
       }
       sqlite3_finalize(stmt);
 
-    
-
-    // 
+      // return FeatureMap 
+      return feature_map;
+    }
+  */
   }
 } // namespace OpenMS
 
@@ -2392,7 +2593,7 @@ namespace OpenMS
           } else if (column_type == DataValue::EMPTY_VALUE)
           {
             String value;
-            Sql::extractValue<String>(&value, stmt, i);
+            Sql::extractValue<String>(&value, stmt, i); 
             continue;
           }
         }
@@ -2408,6 +2609,9 @@ namespace OpenMS
 
     // return FeatureMap 
     return feature_map;
+
+    fm.ensureUniqueId();
+
 
 
   }  
