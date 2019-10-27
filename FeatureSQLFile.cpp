@@ -943,8 +943,6 @@ namespace OpenMS
   {
     Feature subordinate;
 
-    std::cout << "\n I AM here"  << column_nr << "\t" << cols_features << "\t"  << cols_subordinates << "\t"  << std::endl;
-
     // set feature parameters
     String id_s;
     size_t id = 0;
@@ -971,8 +969,6 @@ namespace OpenMS
     subordinate.setIntensity(intensity);
     subordinate.setCharge(charge);
     subordinate.setOverallQuality(quality);
-
-    std::cout << "\n I AM behind the feature parameters" << std::endl;
 
     // userparams
     column_nr = cols_features + 5;  // +5 = subordinate params
@@ -1052,7 +1048,6 @@ namespace OpenMS
       }
     }
 
-    std::cout << "\n I AM behind the user parameters" << std::endl;
 
     // current_subordinate add bbox
     column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
@@ -1065,15 +1060,12 @@ namespace OpenMS
     double max_rt = 0.0;
     Sql::extractValue<double>(&max_rt, stmt, (column_nr + 4));
 
-    std::cout << "\n hull points " << min_mz  << std::endl;
-
-
     ConvexHull2D hull;
     hull.addPoint({min_mz, min_rt});
     hull.addPoint({max_mz, max_rt});
     subordinate.getConvexHulls().push_back(hull);
-    std::cout << "\n I AM behind the convexhulls" << std::endl;
 
+    std::cout << "check subordinate  " << subordinate.getUniqueId()  << std::endl;
 
     return subordinate;
   }
@@ -1222,12 +1214,24 @@ namespace OpenMS
           if (feature != Feature()) feature_map.push_back(feature);
           feature = Feature();
 
+        /*
           // set feature parameters
           String id_s;
           size_t id = 0;
           // extract as String TODO
           Sql::extractValue<String>(&id_s, stmt, 0);
           id = stol(id_s);
+        */
+
+          // set feature parameters
+          String id_s;
+          size_t id = 0;
+          // extract as String TODO
+          Sql::extractValue<String>(&id_s, stmt, 0);
+          //id = stol(id_s);
+          std::istringstream iss(id_s);
+          iss >> id;
+
 
           double rt = 0.0;
           Sql::extractValue<double>(&rt, stmt, 1);
@@ -1384,7 +1388,7 @@ namespace OpenMS
 
 
    
-
+  
     // subordinates
     if (subordinates_switch)
     {
@@ -1423,34 +1427,27 @@ namespace OpenMS
         Sql::extractValue<int>(&bbox_idx, stmt, bbox_col);
 
         Feature* feature = &feature_map[map_fid_to_index[f_id]];
-        vector<Feature>* subordinates = &feature->getSubordinates();
+        std::vector<Feature>* subordinates = &feature->getSubordinates();
 
         if (f_id != f_id_prev) // new feature
-        {
-          f_id_prev = f_id;
-          feature = &feature_map[map_fid_to_index[f_id]];
-          subordinates = &(feature->getSubordinates());
-          column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
+      {
+        f_id_prev = f_id;
+        feature = &feature_map[map_fid_to_index[f_id]];
 
-          std::cout << "\n column_nr = " << column_nr << std::endl;
-          std::cout << " if (f_id != f_id_prev) // new feature "  << std::endl;
+        std::cout << "check feature  " << feature->getUniqueId()  << std::endl;
+        
+        subordinates = &(feature->getSubordinates());
+        column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
 
-          std::cout << "\n I AM here"  << std::endl;
+        std::cout << "check subordinates  " << subordinates->size()  << std::endl;
 
+        subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // add subordinate and first bounding box (if present)
 
-          std::cout << "check subordinates  " << subordinates->size()  << std::endl;
-
-
-          subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // add subordinate and first bounding box (if present)
-
-          std::cout << "check subordinates  " << subordinates->size()  << std::endl;
+        sqlite3_step(stmt);  
 
 
-          sqlite3_step(stmt);  
-
-
-          continue;
-        }
+        continue;
+      }
         else // same feature, different subordinate or bounding box
         {
           if (bbox_idx == 0) 
@@ -1462,6 +1459,7 @@ namespace OpenMS
         
 
             subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // read subordinate + first bounding box
+
           }
           else // add new bounding box to current subordinate
           {
@@ -1479,6 +1477,8 @@ namespace OpenMS
       } // while
       sqlite3_finalize(stmt);
     }  // subordinate switch
+
+
     return feature_map;
   }  
   // end of FeatureSQLFile::read
