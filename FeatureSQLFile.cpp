@@ -1188,10 +1188,11 @@ namespace OpenMS
 
     // working version
     // timo
-    // ONLY FOR features
+    // ONLY features
   
     map<int, size_t> map_fid_to_index; 
-  
+
+  /*
     if (features_switch)
     {
       /// 1. get feature data from database
@@ -1213,15 +1214,6 @@ namespace OpenMS
         {
           if (feature != Feature()) feature_map.push_back(feature);
           feature = Feature();
-
-        /*
-          // set feature parameters
-          String id_s;
-          size_t id = 0;
-          // extract as String TODO
-          Sql::extractValue<String>(&id_s, stmt, 0);
-          id = stol(id_s);
-        */
 
           // set feature parameters
           String id_s;
@@ -1384,11 +1376,280 @@ namespace OpenMS
       }
       sqlite3_finalize(stmt);
     }
+  */
 
 
 
-   
-  
+
+
+
+
+
+
+    /// alterantive version where 2 statements are used to access the joined tables
+    // and traversed  once
+    // read features and bounding boxes
+    // read subordinates and bounding boxes
+    // link features + bbox and subordiates + bbox
+
+    // pseudo code box 
+    /*
+      feature
+        iterate over identical features and subordinates
+        {
+          if f_id == f_id_prev
+          {
+            if s_id == s_id_prev 
+            {
+              if s_bbox_idx == s_bbox_idx_prev
+              {
+                push back bbox to current subordinate
+              }
+              else 
+              {
+                f_id same, s_id same, bbox same -> must be same entry -> is impossible bc table conflict
+                use as catch case for NULL s_bbox entries 
+              }
+            }
+            else if (s_id != s_id_prev)
+            {
+              push back subordinate to subordinates
+              clear bbox vector since new subordinate = new convexhulls
+              
+              if ((s_bbox_idx == s_bbox_idx_prev) && (s_bbox_idx != 0))
+              {
+                use as catch case for NULL s_bbox entries
+              }
+              else ((s_bbox_idx != s_bbox_idx_prev) || (s_bbox_idx == 0))
+              {
+                push_back s_bbox to bbox vector
+              }            
+            }  
+          }
+          else if (f_id != f_id_prev)
+          {
+            push back feature entries to feature_map
+            feature = Feature();
+
+            get bbox since test for subordinates is superfluous, new f_id -> new subordinate
+            0. clear feature, clear subordinate, clear subordinates vector, clear bbox vector
+            // feature = Feature();
+            // subordinate = Feature();
+            // subordinates.clear();
+            // bbox_vector.clear(); ? subordinates and bbox one object?
+            1. get f_bbox
+            2. get subordinate + f_bbox 
+            3. set f_id_prev = f_id, s_id_prev = s_id 
+
+            save to featuremap
+
+          }
+
+          step f_line
+          step s_line
+        }
+    */
+
+    if (features_switch)
+    {
+      sqlite3 *db;
+      sqlite3_stmt * stmt_features;
+      sqlite3_stmt * stmt_subordinates;
+      
+      // Open database
+      SqliteConnector conn(filename);
+      db = conn.getDB();
+
+      /// 1. get feature data from database
+      // unordered
+      //String sql_feats = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id;";
+      String sql_feats = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id ORDER BY FEATURES_TABLE.id;";
+      String sql_subs = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id ORDER BY FEATURES_TABLE.ID;";
+
+      SqliteConnector::prepareStatement(db, &stmt_features, sql_feats);
+      SqliteConnector::prepareStatement(db, &stmt_subordinates, sql_subs);
+     
+      sqlite3_step(stmt_features);
+      sqlite3_step(stmt_subordinates);
+
+      // initialization block
+      // feature and subordinate stmts used to push_back columns of both tables
+      // set starting values
+      Feature feature;
+      Feature subordinate;
+      std::vector<Feature> subordinates;
+      // ids
+      long f_id_prev = 0;
+      long s_id_prev = 0;
+      // subordinate index
+      int sub_idx_prev = 0;
+      // bboxes
+      int f_bbox_idx_prev = 0;
+      int s_bbox_idx_prev = 0;
+
+      // first iteration variable to catch enter loop case
+      // use loop_switch
+      // set to false (= not entered) on start
+      // and to false if last line is reached
+      bool first_feat_switch = false;
+
+      // TODO set last_feature_switch ? ###########################
+
+      // provisional code
+      // test counter to access only first 2 lines in joined tables
+      int test_counter = 1;
+
+      // get features + bboxes, subordinates + bboxes in a single loop
+      for (int i = 0; i <= test_counter; ++i)
+      {
+        std::cout << "\n" << i << std::endl;
+
+      
+
+        /// get data starts here
+        // ##################################################
+        // get data for features and bbox
+        // get feature id
+        String feat_id;
+        long f_id = 0;
+        Sql::extractValue<String>(&feat_id, stmt_features, 0);
+        f_id = stol(feat_id);
+
+        // get feature bbox_idx
+        int f_bbox_col = cols_features + 1 + 4; //56 in features + 1 offset id + 4 position of bbox_idx column
+        int f_bbox_idx = 0;
+        Sql::extractValue<int>(&f_bbox_idx, stmt_features, f_bbox_col);
+
+        // ##################################################
+        // get data for subordinates and bbox
+        // get subordinate ID
+        String sub_id;
+        long s_id = 0;
+        Sql::extractValue<String>(&sub_id, stmt_subordinates, cols_features);
+        s_id = stol(sub_id);        
+
+        // return sub_idx (n-th subordinate)
+        int sub_idx = 0;
+        Sql::extractValue<int>(&sub_idx, stmt_subordinates, 57);
+
+        // get subordinate bbox_idx (n-th bbox)
+        int s_bbox_col = cols_features_join_subordinates_join_bbox - 1; // - 1 to address last column
+        int s_bbox_idx = 0; // set start idx of boundingbox
+        Sql::extractValue<int>(&s_bbox_idx, stmt_subordinates, s_bbox_col);
+
+        // ##################################################
+        // first run case
+        if (first_feat_switch == false)
+          {
+            first_feat_switch = true;
+            f_id_prev = f_id;
+            s_id_prev = s_id;
+
+            sub_idx_prev = sub_idx;
+
+            f_bbox_idx_prev = f_bbox_idx;
+            s_bbox_idx_prev = s_bbox_idx;
+          }
+
+        // ##################################################
+        // iterate over identical features and subordinates
+        // ##################################################
+
+        std::cout << "f_id, f_id_prev, s_id, s_id_prev " << f_id << "\t" << f_id_prev << "\t" << s_id << "\t" << s_id_prev << std::endl;
+
+        if (f_id == f_id_prev) 
+        {
+          std::cout << "f_id == f_id_prev" << std::endl;
+
+
+          if (s_id == s_id_prev)
+          {
+            std::cout << "s_id == s_id_prev" << std::endl;
+            if (s_bbox_idx == s_bbox_idx_prev)
+            {
+              //push back bbox to current subordinate
+              std::cout << "s_bbox_idx == s_bbox_idx_prev" << std::endl;
+            }
+            else if (s_bbox_idx != s_bbox_idx_prev) 
+            {
+              std::cout << "f_id same, s_id same, bbox same -> must be same entry -> is impossible bc table conflict" << std::endl;
+            }
+          }
+          else if (s_id != s_id_prev)
+          {
+            std::cout << "s_id != s_id_prev" << std::endl;
+            // push back subordinate to subordinates
+            subordinates.push_back(subordinate);
+            // clear bbox vector since new subordinate = new convexhulls
+            subordinates.clear();
+            
+            if ((s_bbox_idx == s_bbox_idx_prev) && (s_bbox_idx != 0))
+            {
+              // use as catch case for NULL s_bbox entries
+              std::cout << "if ((s_bbox_idx == s_bbox_idx_prev) && (s_bbox_idx != 0)) " << std::endl;
+            }
+            else if ((s_bbox_idx != s_bbox_idx_prev) || (s_bbox_idx == 0))
+            {
+              // push_back s_bbox to bbox vector
+              std::cout << "subordinate.getConvexHulls().push_back(hull);" << std::endl;
+            }            
+          }  
+        }
+        else if (f_id != f_id_prev)
+        {
+          std::cout << "f_id != f_id_prev" << std::endl;
+        /*
+          push back feature entries to feature_map
+          feature = Feature();
+
+          get bbox since test for subordinates is superfluous, new f_id -> new subordinate
+          0. clear feature, clear subordinate, clear subordinates vector, clear bbox vector
+          // feature = Feature();
+          // subordinate = Feature();
+          // subordinates.clear();
+          // bbox_vector.clear(); ? subordinates and bbox one object?
+          1. get f_bbox
+          2. get subordinate + f_bbox 
+          3. set f_id_prev = f_id, s_id_prev = s_id 
+
+          save to featuremap
+        */
+        }
+
+        f_id_prev = f_id;
+        s_id_prev = s_id;
+
+        sub_idx_prev = sub_idx;
+
+        f_bbox_idx_prev = f_bbox_idx;
+        s_bbox_idx_prev = s_bbox_idx;
+
+        //step f_line
+        sqlite3_step(stmt_features);
+        //step s_line
+        sqlite3_step(stmt_subordinates);
+
+      } // close loop
+
+      // closing statements for features and subordinates query
+      sqlite3_finalize(stmt_features);
+      sqlite3_finalize(stmt_subordinates);
+
+    } // close features_switch
+
+    return feature_map;
+
+  } // end of FeatureSQLFile::read
+
+} // namespace OpenMS
+
+
+
+
+
+
+
+  /*
     // subordinates
     if (subordinates_switch)
     {
@@ -1406,20 +1667,16 @@ namespace OpenMS
 
       while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
       {
+
         // get feature ID
         String feat_id;
         size_t f_id = 0;
         Sql::extractValue<String>(&feat_id, stmt, 0);
         f_id = stol(feat_id);
+        std::istringstream iss(feat_id);
+        iss >> f_id;
 
-      /*
-        // get subordinate ID
-        String sub_id;
-        size_t s_id = 0;
-        // select first subordinate column after "cols_features" feature columns
-        Sql::extractValue<String>(&sub_id, stmt, cols_features);
-        s_id = stol(sub_id);        
-      */
+
 
         // get boundingbox index
         int bbox_col = cols_features_join_subordinates_join_bbox - 1; // - 1 to address last column
@@ -1430,33 +1687,28 @@ namespace OpenMS
         std::vector<Feature>* subordinates = &feature->getSubordinates();
 
         if (f_id != f_id_prev) // new feature
-      {
-        f_id_prev = f_id;
-        feature = &feature_map[map_fid_to_index[f_id]];
+        {
+          f_id_prev = f_id;
+          feature = &feature_map[map_fid_to_index[f_id]];
 
-        std::cout << "check feature  " << feature->getUniqueId()  << std::endl;
-        
-        subordinates = &(feature->getSubordinates());
-        column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
+          std::cout << "check feature  " << feature->getUniqueId()  << std::endl;
+          
+          subordinates = &(feature->getSubordinates());
+          column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
 
-        std::cout << "check subordinates  " << subordinates->size()  << std::endl;
+          std::cout << "check subordinates  " << subordinates->size()  << std::endl;
 
-        subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // add subordinate and first bounding box (if present)
+          subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // add subordinate and first bounding box (if present)
 
-        sqlite3_step(stmt);  
-
-
-        continue;
-      }
+          sqlite3_step(stmt);
+          
+          continue;
+        }
         else // same feature, different subordinate or bounding box
         {
           if (bbox_idx == 0) 
           {
             column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
-
-            std::cout << "\n column_nr = " << column_nr << std::endl;
-            std::cout << "else // same feature, different subordinate or bounding box  "  << std::endl;
-        
 
             subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // read subordinate + first bounding box
 
@@ -1464,9 +1716,6 @@ namespace OpenMS
           else // add new bounding box to current subordinate
           {
             column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
-
-            std::cout << "\n column_nr = " << column_nr << std::endl;
-            std::cout << "else // add new bounding box to current subordinate  "  << std::endl;
 
             (*subordinates)[subordinates->size()-1].getConvexHulls().push_back(readSubordinateBBox_(stmt, column_nr));
           }
@@ -1478,252 +1727,10 @@ namespace OpenMS
       sqlite3_finalize(stmt);
     }  // subordinate switch
 
-
-    return feature_map;
-  }  
-  // end of FeatureSQLFile::read
-
-} // namespace OpenMS
-
-
-
-
-
-
-
-
-
-
-
-/*
-  /// alterantive version where 2 statements are used to access the joined tables
-  // and traversed  once
-  // read features and bounding boxes
-  // read subordinates and bounding boxes
-  // link features + bbox and subordiates + bbox
-
-  // pseudo code box 
-
-  feature
-    iterate over identical features and subordinates
-    {
-      if f_id == f_id_prev
-      {
-        if s_id == s_id_prev 
-        {
-          if s_bbox_idx == s_bbox_idx_prev
-          {
-            push back bbox to current subordinate
-          }
-          else 
-          {
-            f_id same, s_id same, bbox same -> must be same entry -> is impossible bc table conflict
-            use as catch case for NULL s_bbox entries 
-          }
-        }
-        else if (s_id != s_id_prev)
-        {
-          push back subordinate to subordinates
-          clear bbox vector since new subordinate = new convexhulls
-          
-          if ((s_bbox_idx == s_bbox_idx_prev) && (s_bbox_idx != 0))
-          {
-            use as catch case for NULL s_bbox entries
-          }
-          else ((s_bbox_idx != s_bbox_idx_prev) || (s_bbox_idx == 0))
-          {
-            push_back s_bbox to bbox vector
-          }            
-        }  
-      }
-      else if (f_id != f_id_prev)
-      {
-        push back feature entries to feature_map
-        feature = Feature();
-
-        get bbox since test for subordinates is superfluous, new f_id -> new subordinate
-        0. clear feature, clear subordinate, clear subordinates vector, clear bbox vector
-        // feature = Feature();
-        // subordinate = Feature();
-        // subordinates.clear();
-        // bbox_vector.clear(); ? subordinates and bbox one object?
-        1. get f_bbox
-        2. get subordinate + f_bbox 
-        3. set f_id_prev = f_id, s_id_prev = s_id 
-
-        save to featuremap
-
-      }
-
-      step f_line
-      step s_line
-    }
   
 
-  if (features_switch)g
-  {
-    sqlite3 *db;
-    sqlite3_stmt * stmt_features;
-    sqlite3_stmt * stmt_subordinates;
-    
-    // Open database
-    SqliteConnector conn(filename);
-    db = conn.getDB();
+    return feature_map;
+  }  // end of FeatureSQLFile::read
+} // namespace OpenMS
+  */
 
-    /// 1. get feature data from database
-    // unordered
-    //String sql_feats = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id;";
-    String sql_feats = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id ORDER BY FEATURES_TABLE.id;";
-    String sql_subs = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id ORDER BY FEATURES_TABLE.ID;";
-
-    SqliteConnector::prepareStatement(db, &stmt_features, sql_feats);
-    SqliteConnector::prepareStatement(db, &stmt_subordinates, sql_subs);
-    sqlite3_step(stmt_features);
-    sqlite3_step(stmt_subordinates);
-
-    // initialization block
-    // starting feature and subordinate used to push_back columns of both tables
-    // set starting values
-    Feature feature;
-    Feature subordinate;
-    std::vector<Feature> subordinates;
-    // ids
-    long f_id_prev = 0;
-    long s_id_prev = 0;
-    // subordinate index
-    int sub_idx_prev = 0;
-    // bboxes
-    int f_bbox_idx_prev = 0;
-    int s_bbox_idx_prev = 0;
-
-    // first iteration variable to catch enter loop case
-    int first_feat_switch = 0;
-    // TODO set last_feature_switch ? ###########################
-
-    // provisional code
-    // test counter to access only first 2 lines in joined tables
-    int test_counter = 1;
-
-    // get features + bboxes, subordinates + bboxes in a single loop
-    for (int i = 0; i <= test_counter; ++i)
-    {
-      std::cout << "\n" << test_counter << std::endl;
-
-      /// get data starts here
-      // ##################################################
-      // get data for features and bbox
-      // get feature id
-      String feat_id;
-      long f_id = 0;
-      Sql::extractValue<String>(&feat_id, stmt_features, 0);
-      f_id = stol(feat_id);
-
-      // get feature bbox_idx
-      int bbox_col = cols_features + 1 + 4; //56 in features + 1 offset id + 4 position of bbox_idx column
-      int f_bbox_idx = 0;
-      Sql::extractValue<int>(&bbox_idx, stmt_features, bbox_col);
-
-      // ##################################################
-      // get data for subordinates and bbox
-      // get subordinate ID
-      String sub_id;
-      long s_id = 0;
-      Sql::extractValue<String>(&sub_id, stmt_subordinates, cols_features);
-      s_id = stol(sub_id);        
-
-      // return sub_idx (n-th subordinate)
-      int sub_idx = 0;
-      Sql::extractValue<int>(&sub_idx, stmt_subordinates, 57);
-
-      // get subordinate bbox_idx (n-th bbox)
-      int bbox_col = cols_features_join_subordinates_join_bbox - 1; // - 1 to address last column
-      int s_bbox_idx = 0; // set start idx of boundingbox
-      Sql::extractValue<int>(&bbox_idx, stmt_subordinates, bbox_col);
-
-      // ##################################################
-      // first run case
-      if (first_feat_switch == 0)
-        {
-          first_feat_switch = 1;
-          f_id_prev = f_id;
-          s_id_prev = s_id;
-
-          sub_idx_prev = sub_idx;
-
-          f_bbox_idx_prev = f_bbox_idx;
-          s_bbox_idx_prev = s_bbox_idx;
-        }
-
-      // ##################################################
-      // iterate over identical features and subordinates
-      // ##################################################
-      if (f_id == f_id_prev) 
-      {
-        if (s_id == s_id_prev)
-        {
-          if (s_bbox_idx == s_bbox_idx_prev)
-          {
-            push back bbox to current subordinate
-          }
-          else (s_bbox_idx != s_bbox_idx_prev) 
-          {
-            std::cout << "f_id same, s_id same, bbox same -> must be same entry -> is impossible bc table conflict" << std::endl;
-          }
-        }
-        else if (s_id != s_id_prev)
-        {
-          // push back subordinate to subordinates
-          subordinates.push_back(subordinate);
-          // clear bbox vector since new subordinate = new convexhulls
-          subordinates.clear();
-          
-          if ((s_bbox_idx == s_bbox_idx_prev) && (s_bbox_idx != 0))
-          {
-            // use as catch case for NULL s_bbox entries
-            std::cout << "if ((s_bbox_idx == s_bbox_idx_prev) && (s_bbox_idx != 0)) " << std::endl;
-          }
-          else ((s_bbox_idx != s_bbox_idx_prev) || (s_bbox_idx == 0))
-          {
-            // push_back s_bbox to bbox vector
-            std::cout << "subordinate.getConvexHulls().push_back(hull);" << std::endl;
-          }            
-        }  
-      }
-      else if (f_id != f_id_prev)
-      {
-        push back feature entries to feature_map
-        feature = Feature();
-
-        get bbox since test for subordinates is superfluous, new f_id -> new subordinate
-        0. clear feature, clear subordinate, clear subordinates vector, clear bbox vector
-        // feature = Feature();
-        // subordinate = Feature();
-        // subordinates.clear();
-        // bbox_vector.clear(); ? subordinates and bbox one object?
-        1. get f_bbox
-        2. get subordinate + f_bbox 
-        3. set f_id_prev = f_id, s_id_prev = s_id 
-
-        save to featuremap
-
-      }
-
-      //step f_line
-      sqlite3_step(stmt_features);
-      //step s_line
-      sqlite3_step(stmt_subordinates);
-
-    }
-
-
-
-
-
-
-    // closing stmts
-
-    sqlite3_finalize(stmt_features);
-    sqlite3_finalize(stmt_subordinates);
-
-  }
-*/
