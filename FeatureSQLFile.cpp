@@ -33,7 +33,6 @@
 // --------------------------------------------------------------------------
 
 
-
 #include <OpenMS/CONCEPT/Exception.h>
 #include <OpenMS/CONCEPT/UniqueIdInterface.h>
 
@@ -315,7 +314,7 @@ namespace OpenMS
   }
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  //                                                store FeatureMap as SQL database                                                      //
+  //                                                write FeatureMap as SQL database                                                      //
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // fitted snippet of FeatureXMLFile::load
   void FeatureSQLFile::write(const std::string& out_fm, const FeatureMap& feature_map) const
@@ -1458,8 +1457,6 @@ namespace OpenMS
 
 
 
-
-
   
 
 
@@ -1476,8 +1473,6 @@ namespace OpenMS
       sqlite3_step(stmt);
       
       Feature* feature = nullptr;
-
-      int bbox_col = cols_features + cols_features_bbox; //number of columns of features + columns of bbox 
       bool has_bbox = false;
 
       // get line of stmt until empty
@@ -1496,12 +1491,10 @@ namespace OpenMS
         else if (ref_id_idx != 0)
         {
           has_bbox = true;
-          //int bbox_idx = 0 ;
           Sql::extractValue<int>(&bbox_idx, stmt, 61);
-          cout << "\n bbox_idx is " << bbox_idx << endl;
+          //cout << "\n bbox_idx is " << bbox_idx << endl;
         }
 
-        //if ((bbox_idx == 0) || (bbox_flag == -1))
         feature_map.push_back(Feature());
         feature = &feature_map[feature_map.size() - 1];
 
@@ -1616,42 +1609,34 @@ namespace OpenMS
           }
         }
         
-        map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
+        //map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
 
         if (has_bbox == false)
         {
-          cout << "save feature without bbox" << endl;
+          //cout << "save feature without bbox" << endl;
+          map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
         }
         else if (has_bbox == true)
         {
           if (bbox_idx == 0)
           {
-            cout << "save feature as first bbox" << endl;
+            //cout << "save feature as first bbox" << endl;
             ConvexHull2D hull = readBBox_(stmt, cols_features);
             feature->getConvexHulls().push_back(hull);
-            // map feature id to index in feature map (needed to map subordinates to features)
-            cout << "Adding feature ID with map index: " << feature->getUniqueId() << "\t" << feature_map.size() - 1 << endl;
+            map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
           }
           else if (bbox_idx > 0) // add new bb to existing feature
           {
-            cout << "save feature with additional bbox" << endl;
+            //cout << "save feature with additional bbox" << endl;
             ConvexHull2D hull = readBBox_(stmt, cols_features);
             feature->getConvexHulls().push_back(hull);
           }
         }
-        /*
-          // map feature id to index in feature map (needed to map subordinates to features)
-          cout << "Adding feature ID with map index: " << feature->getUniqueId() << "\t" << feature_map.size() - 1 << endl;
-          map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
-        */
+      
         sqlite3_step(stmt);  
       }
       sqlite3_finalize(stmt);
     } // end of feature entries
-
-
-
-
 
     // subordinates
     if (subordinates_switch)
@@ -1661,11 +1646,19 @@ namespace OpenMS
       SqliteConnector::prepareStatement(db, &stmt, sql);
       sqlite3_step(stmt);
 
+
       int column_nr = 0;
       int64_t f_id_prev = 0;
 
+      std::cout << "######################################" << std::endl;
+      std::cout << "debug comment to see last run command" << std::endl;
+      std::cout << "######################################" << std::endl;
+
+
+
       while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
       {
+
         // get feature ID
         int64_t f_id = 0;
         String f_id_string;
@@ -1688,6 +1681,8 @@ namespace OpenMS
 
         if (f_id != f_id_prev) // new feature
         {
+
+
 
           f_id_prev = f_id;
           column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
