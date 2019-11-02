@@ -79,9 +79,9 @@ namespace OpenMS
 { 
   namespace Sql = Internal::SqliteHelper;
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  //                                                            helper functions                                                          //
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  // helper functions                                                                               //
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   // store functions
   // convert int of enum datatype to a struct with prefix and type 
@@ -313,9 +313,9 @@ namespace OpenMS
     return std::make_tuple(features_switch, subordinates_switch, dataprocessing_switch, features_bbox_switch, subordinates_bbox_switch);
   }
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  //                                                write FeatureMap as SQL database                                                      //
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  //write FeatureMap as SQL database                                                      //
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
   // fitted snippet of FeatureXMLFile::load
   void FeatureSQLFile::write(const std::string& out_fm, const FeatureMap& feature_map) const
   {
@@ -326,7 +326,7 @@ namespace OpenMS
     File::remove(filename);
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //                                                        variable declaration                                                          //
+    //variable declaration                                                          //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////   
 
     // declare table entries
@@ -405,13 +405,12 @@ namespace OpenMS
     String null_entry_line = ListUtils::concatenate(null_entries, ",");
     std::cout << null_entry_line << std::endl;
 
-
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    /// build feature header for sql table                                                                                                  //
-    /// build subordinate header as sql table                                                                                               //
-    /// build dataprocessing header as sql table                                                                                            //
-    /// build boundingbox header as sql table                                                                                               //
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// build feature header for sql table                                                            //                                      //
+    /// build subordinate header as sql table                                                         //                                      //
+    /// build dataprocessing header as sql table                                                      //                                      //
+    /// build boundingbox header as sql table                                                         //                                      //
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
     // prepare feature header, add (dynamic) part of user_parameter labels to header and header type vector 
     for (const String& key : common_keys)
     {
@@ -475,11 +474,10 @@ namespace OpenMS
 
 
 
-
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //                                                     create database with empty tables                                                //
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // create database with empty tables                                                //
     // construct SQL_labels for feature, subordinate, dataprocessing and boundingbox tables
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
     // create empty
     // 1. features table
     // vector sql_labels, concatenate element and respective SQL type
@@ -627,14 +625,14 @@ namespace OpenMS
 
     // break into functions?
     // turn into line feed function for SQL database input step statement
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //                                                     store FeatureMap data in tables                                                  //
-    //                                                     1. features                                                                      //                                    
-    //                                                     2. feature boundingboxes                                                         //                                    
-    //                                                     3. subordinates                                                                  //
-    //                                                     4. subordinate boundingboxes                                                     //
-    //                                                     5. dataprocessing                                                                //
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // store FeatureMap data in tables                                                                //
+    // 1. features                                                                                    //                                    
+    // 2. feature boundingboxes                                                                       //                                    
+    // 3. subordinates                                                                                //
+    // 4. subordinate boundingboxes                                                                   //
+    // 5. dataprocessing                                                                              //
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// 1. insert data of features table
     const String feature_elements_sql_stmt = ListUtils::concatenate(feature_elements, ","); 
 
@@ -974,8 +972,36 @@ namespace OpenMS
 
 
 
-  // read functions
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  // read functions                                                                                 //
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // read BBox values of convex hull entries for feature, subordinate table
   ConvexHull2D readBBox_(sqlite3_stmt * stmt, int column_nr)
   {
       
@@ -994,7 +1020,7 @@ namespace OpenMS
     return hull;
   }
 
-  // 
+  // get values of subordinate, user parameter entries of subordinate table
   Feature readSubordinate_(sqlite3_stmt * stmt, int column_nr, int cols_features, int cols_subordinates)
   {
     Feature subordinate;
@@ -1023,7 +1049,7 @@ namespace OpenMS
     subordinate.setOverallQuality(quality);
 
     // userparams
-    column_nr = cols_features + 5;  // +5 = subordinate params
+    column_nr = cols_features + 5;  // + 5 = subordinate params
     for (int i = column_nr; i < cols_features + cols_subordinates  ; ++i) // subordinate userparams - 1 = index of last element in cols_subordinates
     {
       String column_name = sqlite3_column_name(stmt, i);
@@ -1114,7 +1140,8 @@ namespace OpenMS
   }
 
 /*
-  // 
+  // experimental function call to refactor general access of type value queries
+  // improves readability of readBBox_, readSubordinate_
   std::pair<String, DataValue::DataType> getDataProcessing(sqlite3_stmt * stmt, int i)
   {
     String column_name = sqlite3_column_name(stmt, i);
@@ -1211,15 +1238,13 @@ namespace OpenMS
 
   FeatureMap FeatureSQLFile::read(const std::string& filename) const
   {
-    //create empty FeatureMap object
-    FeatureMap feature_map;
+    FeatureMap feature_map; // FeatureMap object as feature container
 
     sqlite3 *db;
     sqlite3_stmt * stmt;
     std::string select_sql;
 
-    // Open database
-    SqliteConnector conn(filename);
+    SqliteConnector conn(filename); // Open database
     db = conn.getDB();
 
     // set switches to access only existent tables
@@ -1229,13 +1254,13 @@ namespace OpenMS
     //bool features_bbox_switch = SqliteConnector::tableExists(db, "FEATURES_TABLE_BOUNDINGBOX");
     //bool subordinates_bbox_switch = SqliteConnector::tableExists(db, "SUBORDINATES_TABLE_BOUNDINGBOX");
 
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //                                                     store sqlite3 database as FeatureMap                                             //
-    //                                                     1. features                                                                      //                                    
-    //                                                     2. subordinates                                                                  //
-    //                                                     3. boundingbox                                                                   //
-    //                                                     4. dataprocessing                                                                //
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////
+    // store sqlite3 database as FeatureMap                                                 //
+    // 1. features                                                                          //                                    
+    // 2. subordinates                                                                      //
+    // 3. boundingbox                                                                       //
+    // 4. dataprocessing                                                                    //
+    //////////////////////////////////////////////////////////////////////////////////////////
     
     String sql;
 
@@ -1243,7 +1268,6 @@ namespace OpenMS
     // 1. features
     sql = "SELECT * FROM FEATURES_TABLE;";
     SqliteConnector::prepareStatement(db, &stmt, sql);
-    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
     int cols_features = sqlite3_column_count(stmt);
     std::cout << "\n" << "Number of columns = " << cols_features << std::endl;
@@ -1252,7 +1276,6 @@ namespace OpenMS
     // 2. subordinates
     sql = "SELECT * FROM FEATURES_SUBORDINATES;";
     SqliteConnector::prepareStatement(db, &stmt, sql);
-    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
     int cols_subordinates = sqlite3_column_count(stmt);
     std::cout << "Number of columns = " << cols_subordinates << std::endl;
@@ -1261,7 +1284,6 @@ namespace OpenMS
     // 3. features bbox
     sql = "SELECT * FROM FEATURES_TABLE_BOUNDINGBOX;";
     SqliteConnector::prepareStatement(db, &stmt, sql);
-    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
     int cols_features_bbox = sqlite3_column_count(stmt);
     std::cout << "Number of columns = " << cols_features_bbox << std::endl;
@@ -1270,24 +1292,30 @@ namespace OpenMS
     // 4. subordinate bbox
     sql = "SELECT * FROM SUBORDINATES_TABLE_BOUNDINGBOX;";
     SqliteConnector::prepareStatement(db, &stmt, sql);
-    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
     int cols_subordinates_bbox = sqlite3_column_count(stmt);
     std::cout << "Number of columns = " << cols_subordinates_bbox << std::endl;
     sqlite3_finalize(stmt);
 
     // 5. concatenation features bbox
-    sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id;";
-    SqliteConnector::prepareStatement(db, &stmt, sql);
-    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
+    String feature_sql = "SELECT * FROM  FEATURES_TABLE \
+                            LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id \
+                            ORDER BY FEATURES_TABLE.ID, FEATURES_TABLE_BOUNDINGBOX.BB_IDX;";
+
+    SqliteConnector::prepareStatement(db, &stmt, feature_sql);
     sqlite3_step(stmt);
     int cols_features_join_bbox = sqlite3_column_count(stmt);
     std::cout << "Number of columns = (features+bbox) " << cols_features_join_bbox << std::endl;
     sqlite3_finalize(stmt);
 
     // 6. concatenation features subordinates bbox 
-    sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id ORDER BY FEATURES_TABLE.ID;";
-    SqliteConnector::prepareStatement(db, &stmt, sql);
+    //sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id ORDER BY FEATURES_TABLE.ID;";
+    
+    String subordinates_sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id \
+                                LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id \
+                                ORDER BY FEATURES_TABLE.ID, FEATURES_SUBORDINATES.sub_idx,SUBORDINATES_TABLE_BOUNDINGBOX.bb_idx;";
+    
+    SqliteConnector::prepareStatement(db, &stmt, subordinates_sql);
     //SqliteConnector::executePreparedStatement(db, &stmt, sql);
     sqlite3_step(stmt);
     int cols_features_join_subordinates_join_bbox = sqlite3_column_count(stmt);
@@ -1297,10 +1325,7 @@ namespace OpenMS
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                     store sqlite3 database as FeatureMap                                             //
-    // traverse queries                                                                                                                     //
-    // set all parameters: features, subordinates, boundingboxes                                                                            //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
     // add dataprocessing entries
     if (dataprocessing_switch)
@@ -1456,20 +1481,13 @@ namespace OpenMS
     } //dataprocessing_switch
 
 
+    std::map<int64_t, size_t> map_fid_to_index; // map features to subordinates
 
-  
-
-
-    std::map<int64_t, size_t> map_fid_to_index; 
-  
-    // add feature entries
+    // get feature entries
     if (features_switch)
     {
       /// 1. get feature data from database
-      //String sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id;";
-      String sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id ORDER BY FEATURES_TABLE.id;";
-
-      SqliteConnector::prepareStatement(db, &stmt, sql);
+      SqliteConnector::prepareStatement(db, &stmt, feature_sql);
       sqlite3_step(stmt);
       
       Feature* feature = nullptr;
@@ -1482,7 +1500,7 @@ namespace OpenMS
 
         int ref_id_idx = 0;
         Sql::extractValue<int>(&ref_id_idx, stmt, 56);
-        cout << "\n" << endl;
+        //cout << "\n" << endl;
 
         if (ref_id_idx == 0)
         {
@@ -1601,7 +1619,7 @@ namespace OpenMS
           } 
           else if (column_type == DataValue::EMPTY_VALUE)
           {
-            std::cout << " else if (column_type == DataValue::EMPTY_VALUE " << column_type << std::endl;
+            //std::cout << " else if (column_type == DataValue::EMPTY_VALUE " << column_type << std::endl;
             break;
             //String value;
             //Sql::extractValue<String>(&value, stmt, i);
@@ -1609,8 +1627,6 @@ namespace OpenMS
           }
         }
         
-        //map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
-
         if (has_bbox == false)
         {
           //cout << "save feature without bbox" << endl;
@@ -1636,29 +1652,25 @@ namespace OpenMS
         sqlite3_step(stmt);  
       }
       sqlite3_finalize(stmt);
-    } // end of feature entries
+    } // end of features
 
-    // subordinates
+
+    for (std::map<int64_t, size_t>::iterator it = map_fid_to_index.begin(); it != map_fid_to_index.end(); ++it)
+    {
+      std::cout << "Value at " <<  it->first << " is " << it->second << std::endl;
+    }
+
+
+    // get subordinate entries
     if (subordinates_switch)
     {
       // join features with subordinates + subordinate bounding boxes
 
-      sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id \
-                                           LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id \
-                                           ORDER BY FEATURES_TABLE.ID, FEATURES_SUBORDINATES.sub_idx,SUBORDINATES_TABLE_BOUNDINGBOX.bb_idx;";
-      //sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id ORDER BY FEATURES_TABLE.ID;";
-      SqliteConnector::prepareStatement(db, &stmt, sql);
+      SqliteConnector::prepareStatement(db, &stmt, subordinates_sql);
       sqlite3_step(stmt);
-
 
       int column_nr = 0;
       int64_t f_id_prev = 0;
-
-      std::cout << "######################################" << std::endl;
-      std::cout << "debug comment to see last run command" << std::endl;
-      std::cout << "######################################" << std::endl;
-
-
 
       while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
       {
@@ -1670,18 +1682,31 @@ namespace OpenMS
         std::istringstream iss(f_id_string);
         iss >> f_id;
 
+        std::cout << "\n f_id = " << f_id << std::endl;
+
+        std::cout << "######################################" << std::endl;
+        std::cout << "debug comment to see last run command" << std::endl;
+        std::cout << "######################################" << std::endl;
+
         // get boundingbox index
         int bbox_col = cols_features_join_subordinates_join_bbox - 1; // - 1 to address last column
         int bbox_idx = 0; // set start idx of boundingbox
-        if (sqlite3_column_type(stmt, bbox_col) == SQLITE_NULL)
+        if (sqlite3_column_type(stmt, bbox_col) == SQLITE_NULL) // 
         {
-          break;
+          break; // same error as in features
         }
+
+
         Sql::extractValue<int>(&bbox_idx, stmt, bbox_col);
+
+
 
 
         Feature* feature = &feature_map[map_fid_to_index[f_id]];
         std::vector<Feature>* subordinates = &feature->getSubordinates();
+
+
+
 
         if (f_id != f_id_prev) // new feature
         {
@@ -1709,7 +1734,7 @@ namespace OpenMS
         sqlite3_step(stmt);
       } // while
       sqlite3_finalize(stmt);
-    }  // subordinate switch
+    } // end of subordinates
   
   
 
