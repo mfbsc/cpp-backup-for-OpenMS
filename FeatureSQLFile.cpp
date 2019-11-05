@@ -1023,7 +1023,7 @@ namespace OpenMS
 
 
   // get values of subordinate, user parameter entries of subordinate table
-  Feature readSubordinate_(sqlite3_stmt * stmt, int column_nr, int cols_features, int cols_subordinates)
+  Feature readSubordinate_(sqlite3_stmt * stmt, int column_nr, int cols_features, int cols_subordinates, bool has_bbox)
   {
     Feature subordinate;
 
@@ -1133,10 +1133,13 @@ namespace OpenMS
       }
     }
 
-    // current_subordinate add bbox
-    column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
-    ConvexHull2D hull = readBBox_(stmt, column_nr);
-    subordinate.getConvexHulls().push_back(hull);
+    if (has_bbox)
+    {
+      // current_subordinate add bbox
+      column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
+      ConvexHull2D hull = readBBox_(stmt, column_nr);
+      subordinate.getConvexHulls().push_back(hull);
+    }
 
     std::cout << "subordinate id " << id_sub << std::endl;
   
@@ -1216,8 +1219,6 @@ namespace OpenMS
 */
 
 
-
-
 // alternate version with table join 
 /*
     // access of features and boundingboxes
@@ -1232,6 +1233,16 @@ namespace OpenMS
   1. for features access
   2. for subordinate access
 */
+
+  int getColumnCount(sqlite3 *db, sqlite3_stmt *stmt, const String sql)
+  {
+    SqliteConnector::prepareStatement(db, &stmt, sql);
+    sqlite3_step(stmt);
+    int column_count = sqlite3_column_count(stmt);
+    sqlite3_finalize(stmt);
+
+    return column_count;
+  }
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                                   read FeatureMap as SQL database                                                    //
@@ -1269,48 +1280,33 @@ namespace OpenMS
     String sql;
 
     // get number of columns for each table except dataprocessing
+    std::cout << std::endl;
     // 1. features
     sql = "SELECT * FROM FEATURES_TABLE;";
-    SqliteConnector::prepareStatement(db, &stmt, sql);
-    sqlite3_step(stmt);
-    int cols_features = sqlite3_column_count(stmt);
-    std::cout << "\n" << "Number of columns = " << cols_features << std::endl;
-    sqlite3_finalize(stmt);
+    int cols_features = getColumnCount(db, stmt, sql);
+    std::cout << "Number of columns = " << cols_features << std::endl;
 
     // 2. subordinates
     sql = "SELECT * FROM FEATURES_SUBORDINATES;";
-    SqliteConnector::prepareStatement(db, &stmt, sql);
-    sqlite3_step(stmt);
-    int cols_subordinates = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = " << cols_subordinates << std::endl;
-    sqlite3_finalize(stmt);
+    int cols_subordinates = getColumnCount(db, stmt, sql);
+    std::cout << "Number of columns = " << cols_subordinates<< std::endl;
 
     // 3. features bbox
     sql = "SELECT * FROM FEATURES_TABLE_BOUNDINGBOX;";
-    SqliteConnector::prepareStatement(db, &stmt, sql);
-    sqlite3_step(stmt);
-    int cols_features_bbox = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = " << cols_features_bbox << std::endl;
-    sqlite3_finalize(stmt);
+    int cols_features_bbox = getColumnCount(db, stmt, sql);
+    std::cout << "Number of columns of feature bbox = " << cols_features_bbox << std::endl;
 
     // 4. subordinate bbox
     sql = "SELECT * FROM SUBORDINATES_TABLE_BOUNDINGBOX;";
-    SqliteConnector::prepareStatement(db, &stmt, sql);
-    sqlite3_step(stmt);
-    int cols_subordinates_bbox = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = " << cols_subordinates_bbox << std::endl;
-    sqlite3_finalize(stmt);
+    int cols_subordinates_bbox = getColumnCount(db, stmt, sql);
+    std::cout << "Number of columns of subodinate bbox = " << cols_subordinates_bbox << std::endl;
 
     // 5. concatenation features bbox
     String feature_sql = "SELECT * FROM  FEATURES_TABLE \
                             LEFT JOIN FEATURES_TABLE_BOUNDINGBOX ON FEATURES_TABLE.id = FEATURES_TABLE_BOUNDINGBOX.ref_id \
                             ORDER BY FEATURES_TABLE.ID, FEATURES_TABLE_BOUNDINGBOX.BB_IDX;";
-
-    SqliteConnector::prepareStatement(db, &stmt, feature_sql);
-    sqlite3_step(stmt);
-    int cols_features_join_bbox = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = (features+bbox) " << cols_features_join_bbox << std::endl;
-    sqlite3_finalize(stmt);
+    int cols_features_join_bbox = getColumnCount(db, stmt, sql);
+    std::cout << "Number of columns of feature join bbox = " << cols_features_join_bbox << std::endl;
 
     // 6. concatenation features subordinates bbox 
     //sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id ORDER BY FEATURES_TABLE.ID;";
@@ -1318,20 +1314,16 @@ namespace OpenMS
     String subordinates_sql = "SELECT * FROM  FEATURES_TABLE LEFT JOIN FEATURES_SUBORDINATES ON FEATURES_TABLE.id = FEATURES_SUBORDINATES.ref_id \
                                 LEFT JOIN SUBORDINATES_TABLE_BOUNDINGBOX ON FEATURES_SUBORDINATES.id = SUBORDINATES_TABLE_BOUNDINGBOX.id \
                                 ORDER BY FEATURES_TABLE.ID, FEATURES_SUBORDINATES.sub_idx,SUBORDINATES_TABLE_BOUNDINGBOX.bb_idx;";
-    
-    SqliteConnector::prepareStatement(db, &stmt, subordinates_sql);
-    //SqliteConnector::executePreparedStatement(db, &stmt, sql);
-    sqlite3_step(stmt);
-    int cols_features_join_subordinates_join_bbox = sqlite3_column_count(stmt);
-    std::cout << "Number of columns = (Features + Subordinates + bbox) " << cols_features_join_subordinates_join_bbox << std::endl;
-    sqlite3_finalize(stmt);
+    int cols_features_join_subordinates_join_bbox = getColumnCount(db, stmt, sql);
+    std::cout << "Number of columns of subordinate join bbox = " << cols_features_join_subordinates_join_bbox << std::endl;
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                                                     store sqlite3 database as FeatureMap                                             //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // add dataprocessing entries
+
+    // begin dataprocessing #######################################
     if (dataprocessing_switch)
     {
       /// 1. get feature data from database
@@ -1351,6 +1343,13 @@ namespace OpenMS
         Sql::extractValue<String>(&id_s, stmt, 0);
         std::istringstream iss(id_s);
         iss >> id;
+
+        // String id_s;
+        // int64_t id = 0;
+        // Sql::extractValue<String>(&id_s, stmt, 0);
+        // std::istringstream iss(id_s);
+        // iss >> id;
+
 
         String software;
         Sql::extractValue<String>(&software, stmt, 1);
@@ -1482,12 +1481,12 @@ namespace OpenMS
 
       sqlite3_finalize(stmt);
 
-    } //dataprocessing_switch
+    } // end of dataprocessing ####################################
 
 
-    std::map<int64_t, size_t> map_fid_to_index; // map features to subordinate index // bbox_idx entries 0,1,2,..
+    std::map<int64_t, size_t> map_fid_to_index; // map feature ids as indices in map 
 
-    // get feature entries #############################################
+    // begin features #############################################
     if (features_switch)
     {
       /// 1. get feature data from database
@@ -1496,37 +1495,54 @@ namespace OpenMS
       
       Feature* feature = nullptr;
       bool has_bbox = false;
+      int64_t f_id_prev = 0;            //############## new var for container problem    
 
-      // get line of stmt until empty
+      int counter = 0;
+
       while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
       {
+        int64_t f_id = 0;
+        String id_str;
+        Sql::extractValue<String>(&id_str, stmt, 0);
+        std::istringstream iss(id_str);
+        iss >> f_id;
+
+        int64_t ref_id = 0;
+        String ref_id_str;
+        Sql::extractValue<String>(&ref_id_str, stmt, cols_features);
+        std::istringstream issref(ref_id_str);
+        issref >> ref_id;
+
         int bbox_idx = 0;
-
-        int ref_id_idx = 0;
-        Sql::extractValue<int>(&ref_id_idx, stmt, 56);
-        //cout << "\n" << endl;
-
-        if (ref_id_idx == 0)
+        if (ref_id == 0)
         {
           has_bbox = false; // no bbox, ref_id is 0
         } 
-        else if (ref_id_idx != 0)
+        else if (ref_id != 0)
         {
           has_bbox = true;
           Sql::extractValue<int>(&bbox_idx, stmt, 61);
-          //cout << "\n bbox_idx is " << bbox_idx << endl;
         }
 
-        feature_map.push_back(Feature());
+        if (f_id != f_id_prev)
+        {
+          feature_map.push_back(Feature());
+          f_id_prev = f_id; // set previous feature id 
+        }
+
+        // push back if f_id != f_id_prev
+
         feature = &feature_map[feature_map.size() - 1];
 
-        // set feature parameters
-        String id_s;
-        int64_t id = 0;
-        // extract as String TODO
-        Sql::extractValue<String>(&id_s, stmt, 0);
-        std::istringstream iss(id_s);
-        iss >> id;
+        // get values id, RT, MZ, Intensity, Charge, Quality
+
+
+
+        std::cout << counter << "nth feature with id: " << f_id << std::endl;
+        //int ref_id = 0;
+        //Sql::extractValue<int>(&ref_id, stmt, 56);
+        ++counter;
+
         double rt = 0.0;
         Sql::extractValue<double>(&rt, stmt, 1);
         double mz = 0.0;
@@ -1538,22 +1554,18 @@ namespace OpenMS
         double quality = 0.0;
         Sql::extractValue<double>(&quality, stmt, 5);
 
-        // get values id, RT, MZ, Intensity, Charge, Quality
-        feature->setUniqueId(id);
+        feature->setUniqueId(f_id);
         feature->setRT(rt);
         feature->setMZ(mz);
         feature->setIntensity(intensity);
         feature->setCharge(charge);
         feature->setOverallQuality(quality);
 
-        // index to account for offsets in joined tables
-        int col_nr = 6;
-        // save userparam columns
-        for (int i = col_nr; i < cols_features ; ++i)
+        int col_nr = 6; // index to account for offsets in joined tables
+        for (int i = col_nr; i < cols_features ; ++i)  // save userparam columns
         {
           String column_name = sqlite3_column_name(stmt, i);
           int column_type = getColumnDatatype(column_name);
-          //std::cout << "\n" << column_name << std::endl;
           
           // test if database column value is NULL
           if (sqlite3_column_type(stmt,i) == SQLITE_NULL)
@@ -1631,23 +1643,20 @@ namespace OpenMS
           }
         }
         
-        if (has_bbox == false)
+        if (has_bbox == false) // add  bbox to feature if present
         {
-          //cout << "save feature without bbox" << endl;
           map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
         }
         else if (has_bbox == true)
         {
           if (bbox_idx == 0)
           {
-            //cout << "save feature as first bbox" << endl;
             ConvexHull2D hull = readBBox_(stmt, cols_features);
             feature->getConvexHulls().push_back(hull);
             map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
           }
           else if (bbox_idx > 0) // add new bb to existing feature
           {
-            //cout << "save feature with additional bbox" << endl;
             ConvexHull2D hull = readBBox_(stmt, cols_features);
             feature->getConvexHulls().push_back(hull);
           }
@@ -1656,7 +1665,25 @@ namespace OpenMS
         sqlite3_step(stmt);  
       }
       sqlite3_finalize(stmt);
-    } // end of features   #############################################
+    } // end of features ##########################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     for (std::map<int64_t, size_t>::iterator it = map_fid_to_index.begin(); it != map_fid_to_index.end(); ++it)
@@ -1664,33 +1691,11 @@ namespace OpenMS
       std::cout << "Value at " <<  it->first << " is " << it->second << std::endl;
     }
 
-    /*
-      problem?:
-      map_fid_to_index accesses feature id by index not by value
-      multiple identical subordinate ids are not represented as index in features
-      3 cases:
-      feat_idx <:
-        -> if f_id != f_id_prev, break 
-      feat_idx =:
-        -> if f_id != f_id_prev, 
-      feat_idx >:
-        -> !=, until f_id == f_id_prev getSubordinate, add to vector 
-        and push_back on new feature
 
-      check feature
-      check subordinate of subordinate table
-      check id of subordinate bbox 
-        Null: -> 0 and continue
-        id -> add convexhull at feature.subordinate.bbox
-     
-        std::cout << "######################################" << std::endl;
-        std::cout << "debug comment to see last run command" << std::endl;
-        std::cout << "f_id is " << f_id << "\n f_id_prev is " << f_id_prev << std::endl;        
-        std::cout << "sub_test_id is " << sub_id << std::endl;        
-        std::cout << "######################################" << std::endl;
 
-      // check case if subordinate has no bbox, must write user params if available
-    */
+
+
+
 
 
     // get subordinate entries #########################################
@@ -1700,184 +1705,177 @@ namespace OpenMS
       sqlite3_step(stmt);
       int column_nr = 0;
       int64_t f_id_prev = 0;
+      int64_t sub_id_prev = 0;
       bool has_bbox = false;
       int bbox_idx = 0;
 
+      int64_t f_id = 0; // get feature id entries for feature- and userparameters
+      String f_id_string;
 
+      int64_t sub_id = 0; // get subordinate id entries for feature- and userparameters
+      String sub_id_string;
 
-      // while joined table still has entries continue 
-      while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
+      int64_t cvhull_id = 0; // get bbox id entries of convex hulls by subordinate-> boundingboxes
+      String cvhull_id_string;
+
+      while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)       // while joined table still has entries continue 
       {
-        int64_t f_id = 0; // get feature id entries for feature- and userparameters
-        String f_id_string;
         Sql::extractValue<String>(&f_id_string, stmt, 0);
         std::istringstream issf(f_id_string);
         issf >> f_id;
 
-        int64_t sub_id = 0; // get subordinate id entries for feature- and userparameters
-        String sub_id_string;
         Sql::extractValue<String>(&sub_id_string, stmt, 56);
         std::istringstream issub(sub_id_string);
         issub >> sub_id;
 
-        int64_t ref_id = 0; // get bbox id entries of convex hulls by subordinate-> boundingboxes
-        String ref_id_string;
-        Sql::extractValue<String>(&ref_id_string, stmt, 72);
-        std::istringstream issref(ref_id_string);
-        issref >> ref_id;
-        // get boundingbox index
-
+        Sql::extractValue<String>(&cvhull_id_string, stmt, 72);
+        std::istringstream issref(cvhull_id_string);
+        issref >> cvhull_id;
 
         // test presence of convex hulls 
-        if (ref_id == 0)  // 0 as impossible value for UniqueIDinterface, cast NULL to 0 via int extractValue()
+        if (cvhull_id == 0)  // 0 as impossible value for UniqueIdinterface, cast NULL to 0 via extractValue()
         {
-          has_bbox = false; // no bbox, ref_id is 0
-          cout << "\nref_id is " << ref_id << endl;
+          has_bbox = false; // no bbox, cvhull_id is 0
+          //cout << "\ncvhull_id is " << cvhull_id << endl;
         } 
-        else if (ref_id != 0) // value of ref_id is not NULL and fits the UniqueIdInterface
+        else if (cvhull_id != 0) // value of cvhull_id is not NULL and fits the UniqueIdInterface
         {
           has_bbox = true;  // bbox is present
-          Sql::extractValue<int>(&bbox_idx, stmt, 79); // last column with subordinate bbox_idx of table          
-          cout << "\nref_id " << ref_id << " has bbox_idx with " << bbox_idx << " as value." << endl;
+          Sql::extractValue<int>(&bbox_idx, stmt, 79); // last column with subordinate bbox_idx of joined table          
+          //cout << "\ncvhull_id " << cvhull_id << " has bbox_idx with " << bbox_idx << " as value." << endl;
         }
 
         Feature* feature = &feature_map[map_fid_to_index[f_id]];  // get index of feature vector subordinates at index of id
         std::vector<Feature>* subordinates = &feature->getSubordinates(); 
 
 
-        std::cout << "sub_id: " << sub_id << std::endl;
+
+            // problem?:
+            // map_fid_to_index accesses feature id by index not by value
+            // multiple identical subordinate ids are not represented as index in features
+            // 3 cases:
+            // feat_idx <:
+            //   -> if f_id != f_id_prev, break 
+            // feat_idx =:
+            //   -> if f_id != f_id_prev, 
+            // feat_idx >:
+            //   -> !=, until f_id == f_id_prev getSubordinate, add to vector 
+            //   and push_back on new feature
+
+            // check feature
+            // check subordinate of subordinate table
+            // check id of subordinate bbox 
+            //   Null: -> 0 and continue
+            //   id -> add convexhull at feature.subordinate.bbox
+          
+            //   std::cout << "######################################" << std::endl;
+            //   std::cout << "debug comment to see last run command" << std::endl;
+            //   std::cout << "f_id is " << f_id << "\n f_id_prev is " << f_id_prev << std::endl;        
+            //   std::cout << "sub_test_id is " << sub_id << std::endl;        
+            //   std::cout << "######################################" << std::endl;
+
+            // // check case if subordinate has no bbox, must write user params if available
 
 
 
-        /*
-          4 CASES:
-            1. NULL -> no value to be saved 
-            2. new subordinate but Just the subordinate (feat + user parameters) -> no convexhull save new feature bbox and continue
-            3. new subordinate with all entries + convex hull -> push back to subordinates vector of current feature 
-              -> CHANGE OF PREV_SUB_ID = SUB_ID
-            4. old subordinate -> bbox idx must be greater than 0, push back to subordinates vector
-              -> PREV_SUB_ID IS UNCHANGED
-        */
-  
-        if (f_id != f_id_prev) // new feature -> presumes new ref_id has bbox with bbox_idx being 0
+          // 4 CASES:
+          //   1. NULL -> no value to be saved       ### DONE ###
+          //   2. new subordinate but just the subordinate (feat + user parameters) -> no convexhull save new feature bbox and continue
+          //   3. new subordinate with all entries + convex hull -> push back to subordinates vector of current feature 
+          //     -> CHANGE OF PREV_SUB_ID = SUB_ID
+          //   4. old subordinate -> bbox idx must be greater than 0, push back to subordinates vector
+          //     -> PREV_SUB_ID IS UNCHANGED
+
+        std::cout << "\nsub_id: " << sub_id << std::endl; // show subordinate id
+        std::cout << "cvhull_id: " << cvhull_id << std::endl; // show subordinate id
+
+        // break current query if subordinate entry is 0, case is possible        
+        if (sub_id == 0)
+        {
+          std::cout << "no subordinate" << std::endl;
+          sqlite3_step(stmt);
+          continue;
+        } 
+
+        if (f_id != f_id_prev) // new feature -> presumes new cvhull_id has bbox with bbox_idx being 0
         {
           std::cout << "f_id != f_id_prev; f_id: " << f_id << " f_id_prev: " << f_id_prev << std::endl;
+          std::cout << "new feature and new subordinate id " << sub_id << std::endl;
           f_id_prev = f_id; // set previous to current feature for subordinate storage
+          sub_id_prev = sub_id;
       
           column_nr = cols_features + 1 + 1;  // size of features column + column SUB_IDX + column REF_ID
-          subordinates->push_back(readSubordinate_(stmt, 58, cols_features, cols_subordinates)); // add subordinate and first bounding box (if present)
-          
-          if (sub_id == 0)
+          if (cvhull_id == 0)
           {
-            std::cout << "no subordinate ergo no convexhull " << sub_id << std::endl;
-            // save user and subordinate parameters
+            std::cout << "... but no convexhull" << std::endl;
+            subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates, has_bbox)); // read subordinate w/o bbox
           }
-          else if (sub_id != 0) // subordinate exists, test presence of a convex hull
+          else if (cvhull_id != 0)
           {
-            std::cout << "sub_id != 0 " << sub_id << std::endl;
-            if (ref_id == 0)
-            {
-              std::cout << "subordinate and no convexhull" << std::endl;
-              subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // read subordinate + first bounding box
-            }
-            else if (ref_id != 0)
-            {
-              std::cout << "subordinate and convexhull" << std::endl;
-              subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // read subordinate + first bounding box
-            }
-
+            std::cout << "...  and convexhull" << std::endl;
+            subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates, has_bbox)); // read subordinate with first bounding box
           }
 
         }
-        else // same feature, different subordinate or bounding box
-        {
+        else // same feature
+        {   
           std::cout << "f_id == f_id_prev; f_id: " << f_id << " f_id_prev: " << f_id_prev << std::endl;
-
-          if (sub_id == 0)
+          std::cout << "same feature with f_id  " << f_id << ", sub_id " << sub_id << " and sub_id_prev " << sub_id_prev  << std::endl;
+          
+          //  test if subordinate is equal to previous subordinate
+            
+          
+          if (sub_id_prev == sub_id)
           {
-            std::cout << "sub_id == 0 " << sub_id << std::endl;
-            if (ref_id == 0)
-            {
-              std::cout << "no subordinate and no convexhull" << std::endl;
-            }
-            else if (ref_id != 0)
-            {
-              std::cout << "This can not happen, bc. a convexhull must have a subordinate entry" << std::endl;
-            }
+            std::cout << " same subordinate, add bbox to its convexhull " << sub_id << std::endl;
+            (*subordinates)[subordinates->size()-1].getConvexHulls().push_back(readBBox_(stmt, column_nr));
           }
-          else if (sub_id != 0)
+          else if (sub_id_prev != sub_id)
           {
-            std::cout << "sub_id != 0 " << sub_id << std::endl;
-            if (ref_id == 0)
-            {
-              std::cout << "subordinate and no convexhull" << std::endl;
-            }
-            else if (ref_id != 0)
-            {
-              std::cout << "subordinate and convexhull" << std::endl;
-            }
+            std::cout << " different subordinate, push back to subordinates " << sub_id << std::endl;
+            subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates, has_bbox)); // read subordinate with first bounding box
 
           }
 
 
-          /*
-            if (bbox_idx == 0) 
-            {
-              std::cout << "subordinates: bbox_idx == 0" << std::endl;
-
-              column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
-              subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // read subordinate + first bounding box
-            }
-            else // add new bounding box to current subordinate
-            {
-              std::cout << "subordinates: bbox_idx > 0" << std::endl;
-
-              column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
-              (*subordinates)[subordinates->size()-1].getConvexHulls().push_back(readBBox_(stmt, column_nr));
-            }
-          */
-        
 
 
-        /*
-        #########################
-        feature code
-        #########################
 
-        if (has_bbox == false)
-        {
-          //cout << "save feature without bbox" << endl;
-          map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
-        }
-        else if (has_bbox == true)
-        {
-          if (bbox_idx == 0)
-          {
-            //cout << "save feature as first bbox" << endl;
-            ConvexHull2D hull = readBBox_(stmt, cols_features);
-            feature->getConvexHulls().push_back(hull);
-            map_fid_to_index[feature->getUniqueId()] = feature_map.size() - 1; 
-          }
-          else if (bbox_idx > 0) // add new bb to existing feature
-          {
-            //cout << "save feature with additional bbox" << endl;
-            ConvexHull2D hull = readBBox_(stmt, cols_features);
-            feature->getConvexHulls().push_back(hull);
-          }
-        }
-        
-        
-        
-        
-        */
+          // if (cvhul_id == 0)
+          // {
+          //   std::cout << "... but no convexhull" << std::endl;
+          // }
+          // else if (cvhul_id != 0)
+          // {
+          //   std::cout << "... and convexhull" << std::endl;
+          // }
+
+          //   if (bbox_idx == 0) 
+          //   {
+          //     std::cout << "subordinates: bbox_idx == 0" << std::endl;
+
+          //     column_nr = cols_features + 1 + 1;// size features + column SUB_IDX + column REF_ID
+          //     subordinates->push_back(readSubordinate_(stmt, column_nr, cols_features, cols_subordinates)); // read subordinate + first bounding box
+          //   }
+          //   else // add new bounding box to current subordinate
+          //   {
+          //     std::cout << "subordinates: bbox_idx > 0" << std::endl;
+
+          //     column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
+          //     (*subordinates)[subordinates->size()-1].getConvexHulls().push_back(readBBox_(stmt, column_nr));
+          //   }
+
+
+
+
+
 
         }
 
         sqlite3_step(stmt);
-      } // while
+      } // end of while of subordinate entries
       sqlite3_finalize(stmt);
-    } // end of subordinates
-  
+    } // end of subordinates ############################################
   
 
     return feature_map;
