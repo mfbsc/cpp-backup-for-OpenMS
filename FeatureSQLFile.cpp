@@ -1028,7 +1028,8 @@ namespace OpenMS
     Feature subordinate;
 
     String id_string;
-    Sql::extractValue<String>(&id_string, stmt, cols_features+2);
+    //Sql::extractValue<String>(&id_string, stmt, cols_features+2); // prior to change, ref_id used instead of !!!subordinate id!!!
+    Sql::extractValue<String>(&id_string, stmt, cols_features);
     std::istringstream iss(id_string);
     int64_t id_sub = 0;
     iss >> id_sub;
@@ -1278,6 +1279,7 @@ namespace OpenMS
     //////////////////////////////////////////////////////////////////////////////////////////
     
     String sql;
+    std::cout << "\n#####################################################\nRead in Database into FeatureMap object \n"<<  std::endl;
 
     // get number of columns for each table except dataprocessing
     std::cout << std::endl;
@@ -1666,13 +1668,6 @@ namespace OpenMS
       }
       sqlite3_finalize(stmt);
     } // end of features ##########################################
-
-
-
-
-
-
-
 
 
 
