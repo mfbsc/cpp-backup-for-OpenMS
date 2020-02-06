@@ -51,13 +51,6 @@
 
 #include <sqlite3.h>
 
-/*
-  #include <sstream>
-  #include <map>
-  #include <iostream>
-  #include <fstream>
-  #include <string>
-*/
 
 
 using namespace std;
@@ -70,11 +63,11 @@ namespace OpenMS
   // helper functions                                                                               //
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  // store functions
-  // convert int of enum datatype to a struct with prefix and type 
+  // storing helper function
+  // convert enum datatype to a struct with prefix and type 
   PrefixSQLTypePair enumToPrefix_(const DataValue::DataType& dt)
   {
-    // create label prefix according to type
+    // assign prefix designating different types of DataValue
     String prefix;
     String type;
     PrefixSQLTypePair pSTP;
@@ -112,13 +105,14 @@ namespace OpenMS
     return pSTP;
   }
 
+  // name sql table with String parameter
   String createTable_(const String& table_name, const String& table_stmt)
   {
     String create_table_stmt = "CREATE TABLE " + table_name + " (" + table_stmt + ");";
     return create_table_stmt;
   }
 
-  // get datatype
+  // resolve type of DataValue by prefix notation 
   DataValue::DataType getColumnDatatype_(const  String& label)
   { 
     DataValue::DataType type;
@@ -226,8 +220,9 @@ namespace OpenMS
 */
 
 
-  // probe first feature in feature_map as template to set tables
-  // check once for features, subordinates, dataprocessing, convexhull bboxes respectively 
+  // probe features in feature_map to determine different table instantiation
+  // test flags of tables for
+  //  features, subordinates, dataprocessing, convexhull bboxes respectively 
   tuple<bool, bool, bool, bool, bool> getTables_(const FeatureMap& feature_map)
   {
     bool features_switch_, subordinates_switch_, dataprocessing_switch_, features_bbox_switch_, subordinates_bbox_switch_;
@@ -261,9 +256,11 @@ namespace OpenMS
     return make_tuple(features_switch_, subordinates_switch_, dataprocessing_switch_, features_bbox_switch_, subordinates_bbox_switch_);
   }
 
+
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   //write FeatureMap as SQL database                                                      //
   ////////////////////////////////////////////////////////////////////////////////////////////////////
+  
   // fitted snippet of FeatureXMLFile::load
   void FeatureSQLFile::write(const string& out_fm, const FeatureMap& feature_map) const
   {
@@ -277,23 +274,28 @@ namespace OpenMS
     //variable declaration                                                          //
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////   
 
-    // declare table entries
+    // declare different table entries
+    // feature_elements contains identification number and measurement fields
     vector<String> feature_elements_ = {"ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     vector<String> feature_elements_types_ = {"INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
     
+    // subordinate features contain an additional SUB_IDX field to handle numeration
     vector<String> subordinate_elements_ = {"ID", "SUB_IDX" , "REF_ID", "RT", "MZ", "Intensity", "Charge", "Quality"};
     vector<String> subordinate_elements_types_ = {"INTEGER", "INTEGER", "INTEGER", "REAL", "REAL", "REAL", "INTEGER", "REAL"};
 
+    // metadata entries of dataprocessing
     vector<String> dataprocessing_elements_ = {"ID", "SOFTWARE", "SOFTWARE_VERSION", "DATA", "TIME", "ACTIONS"};
     vector<String> dataprocessing_elements_types_ = {"INTEGER" ,"TEXT" ,"TEXT" ,"TEXT" ,"TEXT" , "TEXT"};
 
+    // convex hull parameters by feature
     vector<String> feat_bounding_box_elements_ = {"REF_ID", "min_MZ", "min_RT", "max_MZ", "max_RT", "BB_IDX"};
     vector<String> feat_bounding_box_elements_types_ = {"INTEGER" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
 
+    // convex hull parameters b subordinate
     vector<String> sub_bounding_box_elements_ = {"ID", "REF_ID", "min_MZ", "min_RT", "max_MZ", "max_RT", "BB_IDX"};
     vector<String> sub_bounding_box_elements_types_ = {"INTEGER" ,"INTEGER" ,"REAL" ,"REAL" ,"REAL" , "REAL", "INTEGER"};
 
-    // get used tables
+    // initialize tables
     auto tables_ = getTables_(feature_map);
     bool features_switch_ = get<0>(tables_);
     bool subordinates_switch_ = get<1>(tables_);
@@ -301,13 +303,8 @@ namespace OpenMS
     bool features_bbox_switch_ = get<3>(tables_);
     bool subordinates_bbox_switch_ = get<4>(tables_);
 
-    //DEBUG
-    //cout << "table declaration of switches to see which tables are in or out" << endl;
-    //cout << features_switch_ << subordinates_switch_ << dataprocessing_switch_ << features_bbox_switch_ << subordinates_bbox_switch_ << endl;
-    //cout << "table declaration of switches to see which tables are in or out" << endl;
-
-    // read feature_map userparameter values and store as key value map
-    // pass all CommonMetaKeys by setting frequency to 0.0 to a set 
+    // read values of (user)parameters of feature_map and store as key value map
+    // include all CommonMetaKeys by setting frequency to 0.0 in the map_key2type_
     set<String> common_keys_ = MetaInfoInterfaceUtils::findCommonMetaKeys<FeatureMap, set<String> >(feature_map.begin(), feature_map.end(), 0.0);
     map<String, DataValue::DataType> map_key2type_;
 
@@ -323,19 +320,16 @@ namespace OpenMS
       }
     }
 
-    // generate vector dataproc_keys_
-    // fill vector with dataprocessing_userparameters
-    // define map with corresponding datatype, dataproc_map_key2type_
+    // fill vector with (user)parameters of DataProcessing
+    // map with corresponding datatype in dataproc_map_key2type_
     // define String vector sequenc_keys, storing succession of userparameters keys in feature_map
     vector<String> dataproc_keys_;
     const vector<DataProcessing> dataprocessing_userparams = feature_map.getDataProcessing();
     map<String, DataValue::DataType> dataproc_map_key2type_;
     vector<String> sequence_keys_;
-    // traverse each dataprocessing entry in dataprocessing_userparams
-    for (auto dataproc_userparam : dataprocessing_userparams)
+    for (auto dataproc_userparam : dataprocessing_userparams)       // inspect DataProcessing entry 
     {
-      // get key of current dataproc_userparam entry
-      dataproc_userparam.getKeys(dataproc_keys_);
+      dataproc_userparam.getKeys(dataproc_keys_);                   // get keys of current dataproc_userparam entry
       for (auto key : dataproc_keys_)
       {
         const DataValue::DataType& dt = dataproc_userparam.getMetaValue(key).valueType();  // get DataType of current key
@@ -346,16 +340,9 @@ namespace OpenMS
 
     // get number  of user parameters to derive explicit NULL value entries for empty features 
     int user_param_null_entries_ = common_keys_.size();
-
-    //DEBUG
-    //cout << "\n\n\n\n#####################################################################" << endl;
-    //cout << "user_param_null_entries_ = " << user_param_null_entries_ << endl;
-    //cout << "#####################################################################" << endl;
-
-
     vector<String> null_entries_(user_param_null_entries_, "NULL");
     String null_entry_line_ = ListUtils::concatenate(null_entries_, ",");
-    //cout << null_entry_line_ << endl;
+
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// build feature header for sql table                                                            //                                      //
@@ -363,10 +350,8 @@ namespace OpenMS
     /// build dataprocessing header as sql table                                                      //                                      //
     /// build boundingbox header as sql table                                                         //                                      //
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    
-    
-    // prepare feature header, add (dynamic) part of user_parameter labels to header and header type vector 
-
+        
+    // set feature header with dynamic part of user_parameters and respective entries of feature type
     for (const String& key : common_keys_)
     {
       // feature_elements_ vector with strings prefix (_TYPE_, _S_, _IL_, ...) and key  
@@ -374,10 +359,6 @@ namespace OpenMS
       // feature_elements_ vector with SQL TYPES 
       feature_elements_types_.push_back(enumToPrefix_(map_key2type_[key]).sqltype);
     }
-
-
-
-
 
     // prepare subordinate header
     map<String, DataValue::DataType> subordinate_key2type_;
@@ -394,6 +375,7 @@ namespace OpenMS
       }
     }
 
+    // set subordinate header with dynamic part of user_parameters and respective entries of feature type
     for (const auto& key2type : subordinate_key2type_)
     {
       // subordinate_elements_ vector with strings prefix (_TYPE_, _S_, _IL_, ...) and key  
@@ -406,80 +388,61 @@ namespace OpenMS
     // prepare dataprocessing header
     for (auto & key : dataproc_keys_)
     { 
-      //DEBUG
-      //cout << "\"" << enumToPrefix_(dataproc_map_key2type_[key]).prefix << key << "\"" << endl;
-      //cout << enumToPrefix_(dataproc_map_key2type_[key]).prefix << endl;
-      //cout << key << endl;
-      
-      // version without " to keep illegal entrie catch
+      // set header entries and types 
       String dataproc_element = enumToPrefix_(dataproc_map_key2type_[key]).prefix + key;
-      // all in one version with "
-      //String dataproc_element = "\"" + enumToPrefix_(dataproc_map_key2type_[key]).prefix + key + "\"";
-      //cout << dataproc_element << endl;
       dataprocessing_elements_.push_back(dataproc_element);
       String dataproc_element_type = enumToPrefix_(dataproc_map_key2type_[key]).sqltype;
-      //cout << dataproc_element_type << endl;
       dataprocessing_elements_types_.push_back(dataproc_element_type);
-      //cout << "\"" << enumToPrefix_(dataproc_map_key2type_[key]).prefix << key << "\" " << enumToPrefix_(dataproc_map_key2type_[key]).sqltype << endl;      
     }
 
 
-    // test for illegal entries in dataprocessing_header
-    // catch :
+    // test for illegal entries/keywords in dataprocessing_header
+    // catch delimited identifiers (invalid identifiers change with SQL dialect)
     const vector<String> bad_sym_ = {"+", "_", "-", "?", "!", "*", "@", "%", "^", "&", "#", "=", "/", "\\", ":", "\"", "\'"};
 
     for (size_t idx = 0; idx != dataprocessing_elements_.size(); ++idx)
     {
-      // test for illegal SQL entries in dataprocessing_elements_, if found replace
+      // test for illegal SQL entries in dataprocessing_elements_, replace on hit
       for (const String& sym : bad_sym_)
       {
-        if (dataprocessing_elements_[idx].hasSubstring(sym))
-        // use String::quote
+        if (dataprocessing_elements_[idx].hasSubstring(sym))                        // use String::quote
         {
           dataprocessing_elements_[idx] = dataprocessing_elements_[idx].quote();
-          break;
+          break;                                                                    // prevent multiple quoting
         }
       }
     }
 
     // boundingbox is part of convexhull is part of feature and subordinates
     // points of MZ/RT-min-/maxima saved as quadrupel of doubles per convexhull number
-    // preparation of boundingbox header atm needs no implementation
+    // preparation of boundingbox header needs no further implementation of types at the moment
 
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     // create database with empty tables                                                //
     // construct SQL_labels for feature, subordinate, dataprocessing and boundingbox tables
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    // create empty
+    // create headers of tables by concatenation of elements and SQL types
+    // use single string with delimiter ',' as TABLE header
+    // distinguish first column (feature ID) as primary key
+
     // 1. features table
-    // vector sql_labels, concatenate element and respective SQL type
     vector<String> sql_labels_features_ = {};
     for (size_t idx = 0; idx != feature_elements_.size(); ++idx)
     {
       sql_labels_features_.push_back(feature_elements_[idx] + " " + feature_elements_types_[idx]);
     }
-    // add PRIMARY KEY to first entry, assuming 1st column contains primary key
     sql_labels_features_[0].append(" PRIMARY KEY");
-    // add "NOT NULL" to all entries
-    //for_each(sql_labels_features_.begin(), sql_labels_features_.end(), [] (String &s) {s.append(" NULL");});
-    // create single string with delimiter ',' as TABLE header template
     String sql_stmt_features_ = ListUtils::concatenate(sql_labels_features_, ",");
 
     // 2. subordinates table
-    // vector sql_labels, concatenate element and respective SQL type
     vector<String> sql_labels_subordinates_ = {};
     for (size_t idx = 0; idx != subordinate_elements_.size(); ++idx)
     {
       sql_labels_subordinates_.push_back(subordinate_elements_[idx] + " " + subordinate_elements_types_[idx]);
     }
-    // add PRIMARY KEY to first entry, assuming 1st column contains primary key
     sql_labels_subordinates_[0].append(" PRIMARY KEY");
-    // add "NOT NULL" to all entries
-    //for_each(sql_labels_subordinates_.begin(), sql_labels_subordinates_.end(), [] (String &s) {s.append(" NOT NULL");});
-    // create single string with delimiter ',' as TABLE header template
     String sql_stmt_subordinates_ = ListUtils::concatenate(sql_labels_subordinates_, ",");
-
 
     // 3. dataprocessing table
     vector<String> sql_labels_dataprocessing_ = {};
@@ -487,19 +450,8 @@ namespace OpenMS
     { 
       sql_labels_dataprocessing_.push_back(dataprocessing_elements_[idx] + " " + dataprocessing_elements_types_[idx]);
     }
-
-    //DEBUG
-    //String dataproc_keys_label_outputstring = ListUtils::concatenate(sql_labels_dataprocessing_, "\n");
-    //cout << "\n\n\n\n\n\n\n\n" << dataproc_keys_label_outputstring << endl;
-
-
-    // add PRIMARY KEY to first entry, assuming 1st column contains primary key
     sql_labels_dataprocessing_[0].append(" PRIMARY KEY");
-    // add "NOT NULL" to all entries
-    //for_each(sql_labels_dataprocessing_.begin(), sql_labels_dataprocessing_.end(), [] (String &s) {s.append(" NOT NULL");});
-    // create single string with delimiter ',' as TABLE header template
     String sql_stmt_dataprocessing_ = ListUtils::concatenate(sql_labels_dataprocessing_, ",");
-
 
     // 4. boundingbox table
     // 4.1 features
@@ -509,8 +461,8 @@ namespace OpenMS
       sql_labels_boundingbox_.push_back(feat_bounding_box_elements_[idx] + " " + feat_bounding_box_elements_types_[idx]);
     }
     // no PRIMARY KEY because of executeStatement's UNIQUE constraint for primary keys
-    // add "NOT NULL" to all entries
-    //for_each(sql_labels_boundingbox_.begin(), sql_labels_boundingbox_.end(), [] (String &s) {s.append(" NOT NULL");});
+    // add "NOT NULL" to all entries to ensure valid datapoints
+    for_each(sql_labels_boundingbox_.begin(), sql_labels_boundingbox_.end(), [] (String &s) {s.append(" NOT NULL");});
     // create single string with delimiter ',' as TABLE header template
     String sql_stmt_feat_boundingbox = ListUtils::concatenate(sql_labels_boundingbox_, ",");
 
@@ -522,46 +474,47 @@ namespace OpenMS
     {
       sql_labels_boundingbox_.push_back(sub_bounding_box_elements_[idx] + " " + sub_bounding_box_elements_types_[idx]);
     }
-    // add PRIMARY KEY to first entry, assuming 1st column contains primary key
-    //sql_labels_boundingbox_[0].append(" PRIMARY KEY");
+    // add PRIMARY KEY to first entry with first column as primary key of parent feature ID
+    sql_labels_boundingbox_[0].append(" PRIMARY KEY");
     // add "NOT NULL" to all entries
-    //for_each(sql_labels_boundingbox_.begin(), sql_labels_boundingbox_.end(), [] (String &s) {s.append(" NOT NULL");});
-    // create single string with delimiter ',' as TABLE header template
+    for_each(sql_labels_boundingbox_.begin(), sql_labels_boundingbox_.end(), [] (String &s) {s.append(" NOT NULL");});
     String sql_stmt_sub_boundingbox_ = ListUtils::concatenate(sql_labels_boundingbox_, ",");
 
 
-    // create empty SQL table stmt
+    // check for switch and construct empty table statements
     String features_table_stmt_, subordinates_table_stmt_, dataprocessing_table_stmt_, feature_boundingbox_table_stmt_, subordinate_boundingbox_table_stmt_;
     // 1. features
-    if (features_switch_ == true)
+    if (features_switch_)         // create features table
     {
       features_table_stmt_ = createTable_("FEATURES_TABLE", sql_stmt_features_);
     } 
-    else if (features_switch_ == false)
+    else if (features_switch_)    // no features table, exit process
     {
-      features_table_stmt_ = "";
+      cout << "Error receiving values. No features provided" << endl; 
+      exit (EXIT_FAILURE);
+      //features_table_stmt_ = "";
     }
     // 2. subordinates
-    if (subordinates_switch_ == true)
+    if (subordinates_switch_)   // create subordinates table
     {
       subordinates_table_stmt_ = createTable_("FEATURES_SUBORDINATES", sql_stmt_subordinates_);
     } 
-    else if (subordinates_switch_ == false)
+    else if (subordinates_switch_)
     {
       subordinates_table_stmt_ = "";
     }
     // 3. dataprocessing
-    if (dataprocessing_switch_ == true)
+    if (dataprocessing_switch_) // create dataprocessing table
     {
       dataprocessing_table_stmt_ = createTable_("FEATURES_DATAPROCESSING", sql_stmt_dataprocessing_);
     } 
-    else if (dataprocessing_switch_ == false)
+    else if (dataprocessing_switch_)  
     {
       dataprocessing_table_stmt_ = "";
     }
     // 4. boundingbox (features & subordinates)
     // features
-    if (features_bbox_switch_ == true)
+    if (features_bbox_switch_ == true)  // create bounding box table for features
     {
       feature_boundingbox_table_stmt_ = createTable_("FEATURES_TABLE_BOUNDINGBOX", sql_stmt_feat_boundingbox);
     } 
@@ -570,7 +523,7 @@ namespace OpenMS
       feature_boundingbox_table_stmt_ = "";
     }
     // subordinates
-    if (subordinates_bbox_switch_)
+    if (subordinates_bbox_switch_)  // create bounding box table for subordinates
     {
       subordinate_boundingbox_table_stmt_ = createTable_("SUBORDINATES_TABLE_BOUNDINGBOX", sql_stmt_sub_boundingbox_);
     } 
@@ -579,7 +532,7 @@ namespace OpenMS
       subordinate_boundingbox_table_stmt_ = "";
     }
 
-
+    // contatenate table Strings
     String create_sql_ = \
       features_table_stmt_ + \
       subordinates_table_stmt_ + \
@@ -588,20 +541,14 @@ namespace OpenMS
       subordinate_boundingbox_table_stmt_ \
       ;    
 
-    // catch SQL contingencies
-    //create_sql_ = create_sql_.substitute("'", "\:"); // SQL escape single quote in strings  
-    // create SQL database, create empty SQL tables  see (https://github.com/OpenMS/OpenMS/blob/develop/src/openms/source/FORMAT/OSWFile.cpp)
     // Open connection to database
     SqliteConnector conn(filename_);
     conn.executeStatement(create_sql_);
-    //db = conn.getDB();
 
 
 
-    // break into functions?
-    // turn into line feed function for SQL database input step statement
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    // store FeatureMap data in tables                                                                //
+    // store FeatureMap data in table fields                                                          //
     // 1. features                                                                                    //                                    
     // 2. feature boundingboxes                                                                       //                                    
     // 3. subordinates                                                                                //
@@ -610,7 +557,6 @@ namespace OpenMS
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     /// 1. insert data of features table
     const String feature_elements_sql_stmt_ = ListUtils::concatenate(feature_elements_, ","); 
-
     const String feat_bbox_elements_sql_stmt_ = ListUtils::concatenate(feat_bounding_box_elements_, ","); 
 
     // 1.
@@ -1076,9 +1022,7 @@ namespace OpenMS
 
       //store in dataprocessing table
       conn.executeStatement(line_stmt_);
-    }
-  
-
+    }  
   } // end of FeatureSQLFile::write
 
 
@@ -1092,20 +1036,14 @@ namespace OpenMS
 
 
 
-
-
-
-
-
   ////////////////////////////////////////////////////////////////////////////////////////////////////
-  // read functions                                                                                 //
+  // read function                                                                                  //
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
   // read BBox values of convex hull entries for feature, subordinate table
   ConvexHull2D readBBox_(sqlite3_stmt* stmt, int column_nr)
   {
-      
     double min_MZ = 0.0;
     Sql::extractValue<double>(&min_MZ, stmt, (column_nr + 1));
     double min_RT = 0.0;
@@ -1121,7 +1059,6 @@ namespace OpenMS
     return hull;
   }
 
-
   // get values of subordinate, user parameter entries of subordinate table
   Feature readSubordinate_(sqlite3_stmt * stmt, int column_nr, int cols_features, int cols_subordinates, bool has_bbox)
   {
@@ -1132,10 +1069,6 @@ namespace OpenMS
     istringstream iss(id_string);
     int64_t id_sub = 0;
     iss >> id_sub;
-
-    //cout << "  col_sub is : " << cols_features << endl;
-    //cout << "  col_sub is : " << cols_features << endl;
-    //cout << "  col_sub value is : " << id_sub << endl;
 
     double rt = 0.0;
     Sql::extractValue<double>(&rt, stmt, column_nr + 1);
@@ -1155,17 +1088,20 @@ namespace OpenMS
     subordinate.setOverallQuality(quality);
 
     // userparams
-    column_nr = cols_features + 5;  // + 5 = subordinate params
 
+
+
+    column_nr = cols_features + 5;  //  offset of 5, represents subordinate parameters
     for (int i = column_nr; i < cols_features + cols_subordinates  ; ++i) // subordinate userparams - 1 = index of last element in cols_subordinates
     {
       String column_name = sqlite3_column_name(stmt, i);
       int column_type = getColumnDatatype_(column_name);
 
-      if (sqlite3_column_type(stmt,i) == SQLITE_NULL)
+      if (sqlite3_column_type(stmt,i) == SQLITE_NULL) // check for end of table column
       {
         break;
       }
+      // extract current column DataValue type and value
       else if (column_type == DataValue::STRING_VALUE)
       {
         column_name = column_name.substr(3);
@@ -1197,8 +1133,7 @@ namespace OpenMS
         Sql::extractValue<String>(&value, stmt, i);
 
         StringList sl;
-        // cut off "[" and "]""
-        value = value.chop(1);
+        value = value.chop(1);  // cut off "[" and "]""
         value = value.substr(1);
         value.split(", ", sl);
         subordinate.setMetaValue(column_name, sl);
@@ -1237,14 +1172,11 @@ namespace OpenMS
 
     if (has_bbox)
     {
-      // current_subordinate add bbox
-      column_nr = cols_features + cols_subordinates + 1; //+ 1 = REF_ID
+      // add bounding box to current_subordinate
+      column_nr = cols_features + cols_subordinates + 1; // offset of 1, represents REF_ID parameter
       ConvexHull2D hull = readBBox_(stmt, column_nr);
       subordinate.getConvexHulls().push_back(hull);
     }
-
-    //cout << "subordinate id " << id_sub << endl;
-  
     return subordinate;
   }
 
@@ -1271,11 +1203,13 @@ namespace OpenMS
     FeatureMap feature_map; // FeatureMap object as feature container
 
     sqlite3 *db;
-    sqlite3_stmt * stmt;
+    sqlite3_stmt * stmt = NULL;
     string select_sql;
 
     SqliteConnector conn(filename_); // Open database
     db = conn.getDB();
+
+
 
     // set switches to access only existent tables
     bool features_switch_ = SqliteConnector::tableExists(db, "FEATURES_TABLE");
@@ -1305,8 +1239,6 @@ namespace OpenMS
     // fit queries according to present tables
     // get number of columns for each table except dataprocessing
 
-    //DEBUG
-    cout << "\n############################ here is read ####################  \n\n\n" << endl;
     //////////////////////////////////////////////////////////////////////////////////////////
     // 1. features
     //////////////////////////////////////////////////////////////////////////////////////////
@@ -1664,7 +1596,7 @@ namespace OpenMS
       // set f_id_prev to 0 to ensure that if an id is read 
       // a new entry in the feature_map can be generated
       int64_t f_id_prev = 0;            
-      int counter = 0;
+      //int counter = 0;
 
       while (sqlite3_column_type( stmt, 0 ) != SQLITE_NULL)
       {
@@ -1711,7 +1643,7 @@ namespace OpenMS
         //cout << counter << "nth feature with id: " << f_id << endl;
         //int ref_id = 0;
         //Sql::extractValue<int>(&ref_id, stmt, 56);
-        ++counter;
+        //++counter;
 
         double rt = 0.0;
         Sql::extractValue<double>(&rt, stmt, 1);
@@ -1855,7 +1787,6 @@ namespace OpenMS
     // get subordinate entries #########################################
     if (subordinates_switch_)
     {
-
       SqliteConnector::prepareStatement(db, &stmt, subordinates_sql);
       sqlite3_step(stmt);
       int column_nr = 0;
@@ -1880,9 +1811,7 @@ namespace OpenMS
         issf >> f_id;
 
         // case of features with subordinates with and without boundingboxes (due to changes in column number)
-        
-
-        if (subordinates_switch_)  // features have subordinates but no boundingbox
+        if (subordinates_switch_)  // features with subordinates but no boundingbox
         {
           // extract sub_id
           Sql::extractValue<String>(&sub_id_string, stmt, (cols_features));
@@ -1906,22 +1835,6 @@ namespace OpenMS
           //cout << "cvhull_id " << cvhull_id << endl;
         }
 
-      /*  OLD Code that worked for the feature + subordinate + feature_bbox + subordinate_bbox
-        // extract sub_id
-        Sql::extractValue<String>(&sub_id_string, stmt, (cols_features + cols_subordinates));
-        istringstream issub(sub_id_string);
-        issub >> sub_id;
-        cout << "sub_id " << sub_id << endl;
-
-        // extract REF_ID
-        Sql::extractValue<String>(&cvhull_id_string, stmt, (cols_features + cols_subordinates));
-        istringstream issref(cvhull_id_string);
-        issref >> cvhull_id;
-        cout << "cvhull_id " << cvhull_id << endl;
-
-      */
-
-
         // test presence of convex hulls 
         if (cvhull_id == 0)  // 0 as impossible value for UniqueIdinterface, cast NULL to 0 via extractValue()
         {
@@ -1938,11 +1851,6 @@ namespace OpenMS
 
         Feature* feature = &feature_map[map_fid_to_index[f_id]];  // get index of feature vector subordinates at index of id
         vector<Feature>* subordinates = &feature->getSubordinates(); 
-
-
-
-        //cout << "\nsub_id: " << sub_id << endl; // show subordinate id
-        //cout << "cvhull_id: " << cvhull_id << endl; // show subordinate id
 
         // break current query if subordinate entry is 0, case is possible        
         if (sub_id == 0)
